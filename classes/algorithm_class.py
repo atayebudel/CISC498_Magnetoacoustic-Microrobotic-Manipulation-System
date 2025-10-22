@@ -1,5 +1,4 @@
 # imports from gui_functions.py 
-
 from classes.control_class import Controller
 from classes.gui_functions import MainWindow
 from classes.path_planning_class import Path_Planner
