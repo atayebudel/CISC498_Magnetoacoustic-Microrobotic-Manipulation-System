@@ -1,3 +1,13 @@
+"""
+GUI Functions Module for Magnetoacoustic Microrobotic Manipulation System.
+
+This module implements the main application window and handles all GUI interactions
+for controlling and tracking microrobots using magnetic and acoustic fields.
+
+Classes:
+    MainWindow: Main application window with video tracking, control, and data recording.
+"""
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QFileDialog
 import sys
@@ -42,9 +52,38 @@ from classes.path_planning_class import Path_Planner
 from classes import tracking_panel
 
 class MainWindow(QtWidgets.QMainWindow):
+    """
+    Main application window for the Magnetoacoustic Microrobotic Manipulation System.
+    
+    This class handles:
+    - Video capture and display from FLIR cameras or video files
+    - Real-time microrobot tracking and visualization
+    - Magnetic field control via Arduino
+    - Joystick input for manual control
+    - Path planning and autonomous navigation
+    - Data recording and export to Excel
+    - Simulation of magnetic field configurations
+    
+    Signals:
+        positionChanged (QPoint): Emitted when mouse position changes on video feed.
+    
+    Attributes:
+        ui (Ui_MainWindow): UI widgets and layout
+        arduino (ArduinoHandler): Interface to Arduino hardware controller
+        tracker (tracking_panel): Video tracking and analysis
+        simulator (HelmholtzSimulator): Magnetic field visualization
+        control_robot (Controller): Autonomous control algorithms
+        path_planner (Path_Planner): Path planning algorithms
+    """
     positionChanged = QtCore.pyqtSignal(QtCore.QPoint)
 
     def __init__(self, parent=None):
+        """
+        Initialize the main window and all subsystems.
+        
+        Args:
+            parent (QWidget, optional): Parent widget. Defaults to None.
+        """
         super(MainWindow, self).__init__(parent=parent)
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -251,6 +290,11 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
     def clear_tracking(self):
+        """
+        Clear all tracked robots and cells from the current session.
+        
+        Removes all tracking data including trajectories and magnetic field history.
+        """
         if self.tracker is not None:
             del self.tracker.robot_list[:]
             del self.tracker.cell_list[:]
@@ -264,6 +308,13 @@ class MainWindow(QtWidgets.QMainWindow):
 
         
     def makeinf_trajectory(self):
+        """
+        Generate an infinity symbol (lemniscate) trajectory for the last tracked robot.
+        
+        Creates a smooth figure-eight path centered on the video frame using
+        parametric equations. The trajectory size is controlled by the infinity_size
+        spin box in the UI.
+        """
         if self.tracker is not None:
             if len(self.tracker.robot_list)>0:
              
@@ -293,6 +344,12 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def update_sensor_label(self):
+        """
+        Update the magnetic field sensor display labels.
+        
+        Called periodically by timer to refresh Bx, By, Bz sensor readings
+        from the Arduino hall effect sensors.
+        """
         # Replace this with your actual value source
         self.ui.bxlabel.setText("Bx: "+str(self.bx_sensor))
         self.ui.bylabel.setText("By: "+str(self.by_sensor))
@@ -301,6 +358,25 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def update_actions_frame(self, displayframe, cell_mask, robot_list, cell_list):
+        """
+        Main control loop that processes each video frame.
+        
+        This method:
+        1. Reads hall effect sensor data from Arduino
+        2. Executes path planning algorithms if enabled
+        3. Runs control algorithms (orient/roll/push) if enabled
+        4. Processes joystick input if enabled
+        5. Updates robot and cell tracking data
+        6. Saves data to Excel if recording
+        7. Displays frame with overlays
+        8. Sends commands to Arduino hardware
+        
+        Args:
+            displayframe (np.ndarray): Current video frame to display
+            cell_mask (np.ndarray): Binary mask of detected cells
+            robot_list (list): List of tracked Robot objects
+            cell_list (list): List of tracked Cell objects
+        """
         #read hall effect sensor data from arduino
         sensor = self.arduino.receive()
         self.bx_sensor = -1 * round(sensor[0], 1)   #Bx sensor sign is switched
@@ -638,6 +714,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def apply_actions(self, status):
+        """
+        Apply current magnetic field and acoustic actions to hardware and simulator.
+        
+        Sends field parameters to Arduino for hardware control and updates
+        the magnetic field simulator visualization.
+        
+        Args:
+            status (bool): If True, apply current actions. If False, zero all outputs.
+        """
         #the purpose of this function is to output the actions via arduino, 
         # show the actions via the simulator
         # and record the actions by appending the field_list
@@ -667,9 +752,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def toggle_recording(self):
+        """Toggle video recording on/off."""
         tracking_panel.toggle_recording(self)
 
     def start_data_record(self):
+        """
+        Initialize Excel workbook for data recording.
+        
+        Creates sheets for:
+        - Magnetic field actions (Bx, By, Bz, angles, frequencies)
+        - Robot tracking data (position, velocity, acceleration)
+        - Cell tracking data
+        """
         self.frame_number = 0
         self.tracker.framenum = 1
         self.tracker.start_time = time.time()
@@ -707,6 +801,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def stop_data_record(self):
+        """
+        Stop data recording and save Excel file.
+        
+        Finalizes the Excel workbook with trajectory data and saves to disk
+        with timestamp filename.
+        """
         #tell update_actions function to stop appending data to the sheets
         
         self.save_status = False
@@ -733,6 +833,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     
     def savedata(self):
+        """Toggle data recording on/off and handle UI updates."""
         if self.ui.savedatabutton.isChecked():
             self.ui.savedatabutton.setText("Stop")
             self.start_data_record()
@@ -747,6 +848,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def read_excel_actions(self):
+        """
+        Import pre-recorded magnetic field actions from Excel file.
+        
+        Opens file dialog for user to select Excel file containing
+        frame-by-frame magnetic field parameters.
+        """
         options = QFileDialog.Options()
         self.excel_file_name, _ = QFileDialog.getOpenFileName(self, "Open Excel File", "", "Excel Files (*.xlsx *.xls)", options=options)
         if self.excel_file_name:
@@ -754,6 +861,12 @@ class MainWindow(QtWidgets.QMainWindow):
             
         
     def apply_excel_actions(self):
+        """
+        Toggle playback of imported Excel actions.
+        
+        When enabled, applies magnetic field parameters from Excel file
+        synchronized to current frame number.
+        """
         if self.ui.apply_actions.isChecked():
             self.excel_actions_status = True
             self.actions_counter = 0
@@ -768,6 +881,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     
     def toggle_simulation(self):
+        """Toggle magnetic field simulator visualization on/off."""
         if self.ui.simulationbutton.isChecked():
             self.simulator.start()
             self.tbprint("Simulation Off")
@@ -780,6 +894,12 @@ class MainWindow(QtWidgets.QMainWindow):
     
     
     def toggle_control_status(self): 
+        """
+        Toggle autonomous control algorithms on/off.
+        
+        When enabled, control algorithms (orient/roll/push) run automatically
+        based on tracked robot positions and user-defined waypoints.
+        """
         if self.ui.controlbutton.isChecked():
             self.control_robot.reset()
             self.control_status = True
@@ -797,6 +917,12 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def toggle_joystick_status(self):
+        """
+        Toggle joystick control mode on/off.
+        
+        Allows manual control of magnetic fields using a connected USB joystick.
+        Checks for joystick availability before enabling.
+        """
         if pygame.joystick.get_count() != 0:
             if self.ui.joystickbutton.isChecked():
                 self.joystick_status = True
@@ -811,6 +937,12 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tbprint("No Joystick Connected...")
 
     def toggle_autoacoustic(self):
+        """
+        Toggle automatic acoustic frequency optimization.
+        
+        When enabled, automatically calculates optimal acoustic frequency
+        based on robot size and material properties.
+        """
         if self.tracker is not None:
             if self.ui.autoacousticbutton.isChecked():
                 self.autoacousticstatus = True
@@ -838,6 +970,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 
 
     def get_acoustic_frequency(self):
+        """Read acoustic frequency value from UI spin box."""
         if self.ui.applyacousticbutton.isChecked():
             self.acoustic_frequency = self.ui.acousticfreq_spinBox.value()
             #self.tbprint("Control On: {} Hz".format(self.acoustic_frequency))
@@ -845,6 +978,11 @@ class MainWindow(QtWidgets.QMainWindow):
         
     
     def apply_acoustic(self):
+        """
+        Apply or stop acoustic stimulation.
+        
+        Updates LED indicator and sends frequency to Arduino.
+        """
         if self.ui.applyacousticbutton.isChecked():
             self.ui.applyacousticbutton.setText("Stop")
             #self.tbprint("Control On: {} Hz".format(self.acoustic_frequency))
@@ -876,11 +1014,28 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
     def tbprint(self, text):
+        """
+        Print text to the UI console/textbox.
+        
+        Args:
+            text (str): Message to display in console
+        """
         #print to textbox
         self.ui.plainTextEdit.appendPlainText("$ "+ text)
     
 
     def convert_coords(self,pos):
+        """
+        Convert mouse position from display coordinates to video coordinates.
+        
+        Accounts for scaling between video resolution and display widget size.
+        
+        Args:
+            pos (QPoint): Mouse position in display coordinates
+            
+        Returns:
+            tuple: (x, y) position in video coordinates
+        """
         #need a way to convert the video position of mouse to the actually coordinate in the window
         newx = int(pos.x() * (self.video_width / self.display_width)) 
         newy = int(pos.y() * (self.video_height / self.display_height))
@@ -900,6 +1055,19 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def eventFilter(self, object, event):
+        """
+        Filter and handle mouse events on the video display.
+        
+        Processes clicks, drags, and wheel events for robot selection,
+        waypoint creation, and zoom control.
+        
+        Args:
+            object (QObject): Object that received the event
+            event (QEvent): Event to process
+            
+        Returns:
+            bool: True if event was handled, False otherwise
+        """
         return tracking_panel.eventFilter(self, object, event)
             
             
@@ -909,6 +1077,15 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def update_croppedimage(self, frame, recoreded_frame):
+        """
+        Update the cropped robot view display.
+        
+        Shows zoomed-in view of selected robot and optionally records it.
+        
+        Args:
+            frame (np.ndarray): Cropped frame to display
+            recoreded_frame (np.ndarray): Frame to record if recording is active
+        """
         """Updates the cropped image_label with a new cropped opencv image"""
         
         rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -927,6 +1104,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
 
     def croppedrecordfunction(self):
+        """Toggle recording of cropped robot view."""
         if self.cap is not None:
             if self.ui.croppedrecordbutton.isChecked():
                 self.ui.croppedrecordbutton.setText("Stop")
@@ -955,6 +1133,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
     
     def setFile(self):
+        """
+        Initialize video capture source.
+        
+        Attempts to connect to FLIR camera using EasyPySpin, falls back to
+        default camera if unavailable. Configures display dimensions and frame rate.
+        """
         if self.videopath == 0:
             try:
                 self.cap  = EasyPySpin.VideoCapture(0)
@@ -1012,6 +1196,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def selectFile(self):
+        """
+        Open file dialog to select video file for playback.
+        
+        Allows loading recorded videos instead of live camera feed.
+        """
         options = QtWidgets.QFileDialog.Options()
         options |= QtWidgets.QFileDialog.ReadOnly
         file_path, _ = QtWidgets.QFileDialog.getOpenFileName(self, "Open File", "", "All Files (*);;Text Files (*.txt);;Python Files (*.py)", options=options)
@@ -1032,6 +1221,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     
     def populate_serial_ports(self):
+        """Scan and populate dropdown with available serial ports for Arduino."""
         ports = list_ports.comports()
         if len(ports) > 0:
             self.ui.arduino_portbox.clear()
@@ -1045,15 +1235,23 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
     def handle_port_change(self, selected_port):
+        """
+        Handle Arduino serial port selection change.
+        
+        Args:
+            selected_port (str): Name of selected serial port
+        """
         self.arduino_port = selected_port
         
 
 
 
     def start(self):
+        """Start video capture and tracking loop."""
         tracking_panel.start(self)
 
     def showmask(self):
+        """Toggle display between original video and segmentation mask."""
         if self.tracker is not None:
             if self.ui.maskbutton.isChecked():
                 self.ui.maskbutton.setText("Original")
@@ -1063,6 +1261,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tracker.mask_flag = False
     
     def showcroppedoriginal(self):
+        """Toggle cropped view between original and mask display."""
         if self.tracker is not None:
             if self.ui.croppedmasktoggle.isChecked():
                 self.ui.croppedmasktoggle.setText("Mask")
@@ -1073,33 +1272,41 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
     def spinbox_alphachanged(self):
+        """Sync alpha angle dial with spinbox value."""
         self.ui.alphadial.setValue(self.ui.alphaspinBox.value())
     
     def dial_alphachanged(self):
+        """Sync alpha angle spinbox with dial value."""
         self.ui.alphaspinBox.setValue(self.ui.alphadial.value())
 
     def gradientcommand(self):
+        """Toggle magnetic field gradient mode on/off."""
         self.gradient_status = int(self.ui.gradient_status_checkbox.isChecked())
 
     def equalfieldcommand(self):
+        """Toggle equal magnetic field mode on/off."""
         self.equal_field_status = int(self.ui.equal_field_checkbox.isChecked())
 
     def get_objective(self):
+        """Read microscope objective magnification from UI."""
         if self.tracker is not None:
             self.tracker.objective = self.ui.objectivebox.value()
 
     def get_exposure(self):
+        """Read camera exposure time from UI and apply to camera."""
         if self.tracker is not None:
             self.tracker.exposure = self.ui.exposurebox.value()
     
 
 
     def invertmaskcommand(self):
+        """Toggle mask inversion for tracking bright or dark objects."""
         if self.tracker is not None:
             self.ui.maskinvert_checkBox.setText("Invert Mask: " + str(self.ui.maskinvert_checkBox.isChecked()))
             self.tracker.maskinvert = self.ui.maskinvert_checkBox.isChecked()
 
     def pause(self):
+        """Pause or resume video playback (video files only)."""
         if self.videopath != 0:
             if self.ui.pausebutton.isChecked():
                 self.tracker._play_flag = False
@@ -1110,12 +1317,14 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.ui.pausebutton.setText("Pause")
                 
     def frameright(self):
+        """Advance video by one frame (video files only)."""
         if self.videopath != 0:
             self.tracker.framenum+=1
             self.ui.frameslider.setValue(self.tracker.framenum)
             self.ui.framelabel.setText("Frame:"+str(self.tracker.framenum))
 
     def frameleft(self):
+        """Rewind video by one frame (video files only)."""
         if self.videopath != 0:
             self.tracker.framenum-=1
             self.ui.frameslider.setValue(self.tracker.framenum)
@@ -1125,6 +1334,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     
     def get_manual_bfieldbuttons(self):
+        """Toggle manual magnetic field control mode."""
         if self.ui.manualapplybutton.isChecked():
             self.manual_status = True
             self.ui.manualapplybutton.setText("Stop")
@@ -1136,6 +1346,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
        
     def get_slider_vals(self):
+        """
+        Read all UI slider and spinbox values and apply to tracker.
+        
+        Updates tracking parameters including mask thresholds, dilation,
+        blur, crop sizes, and control parameters.
+        """
         memory = self.ui.memorybox.value()
         magneticfreq = self.ui.magneticfrequencydial.value()
         gamma = self.ui.gammadial.value()
@@ -1181,6 +1397,7 @@ class MainWindow(QtWidgets.QMainWindow):
          
         
     def resetparams(self):
+        """Reset all tracking and control parameters to default values."""
         self.ui.robotmasklowerbox.setValue(0)
         self.ui.robotmaskupperbox.setValue(128)
         self.ui.robotmaskdilationbox.setValue(0)
@@ -1207,12 +1424,23 @@ class MainWindow(QtWidgets.QMainWindow):
         
 
     def resizeEvent(self, event):
+        """
+        Handle window resize events.
+        
+        Args:
+            event (QResizeEvent): Resize event with new dimensions
+        """
         windowsize = event.size()
         self.window_width = windowsize.width()
         self.window_height = windowsize.height()
         self.resize_widgets()
  
     def resize_widgets(self):
+        """
+        Adjust widget sizes and positions based on current window size.
+        
+        Maintains aspect ratio of video display and scales UI elements proportionally.
+        """
         self.display_height = int(self.window_height*self.displayheightratio) #keep this fixed, changed the width dpending on the aspect ratio
         self.framesliderheight = int(self.window_height*self.framesliderheightratio)
         self.textheight = int(self.window_height*self.textheightratio)
@@ -1231,7 +1459,18 @@ class MainWindow(QtWidgets.QMainWindow):
         #self.ui.tabWidget.setGeometry(QtCore.QRect(12,  6,  260 ,     self.tabheight))
 
     def handle_zoom(self, frame):
+        """
+        Apply digital zoom to a region of the video frame.
         
+        Crops and scales a region around the specified zoom coordinates,
+        then overlays it back onto the original frame.
+        
+        Args:
+            frame (np.ndarray): Video frame to zoom
+            
+        Returns:
+            np.ndarray: Frame with zoomed region
+        """
         if self.zoomscale > 1:
             x = self.zoom_x
             y = self.zoom_y
@@ -1281,7 +1520,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def closeEvent(self, event):
         """
-        called when x button is pressed
+        Handle application close event.
+        
+        Called when X button is pressed
+
+        Ensures proper cleanup of threads, hardware connections, and data files.
+        
+        Args:
+            event (QCloseEvent): Close event
         """
         
         if self.tracker is not None:
