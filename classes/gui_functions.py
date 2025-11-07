@@ -141,32 +141,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.joystick_status = False
         self.manual_status = False
 
-
-        """
-        if "mac" in platform.platform():
-            self.tbprint("Detected OS: macos")
-            self.joystick_actions = Mac_Joystick()
-        elif "Linux" in platform.platform():
-            self.tbprint("Detected OS: Linux")
-            self.joystick_actions = Linux_Joystick()
-        elif "Windows" in platform.platform():
-            self.tbprint("Detected OS:  Windows")
-            self.joystick_actions = Windows_Joystick()
-        else:
-            self.tbprint("undetected operating system")
-        """
-
-        """
-        for event in pygame.event.get():
-            if event.type == pygame.JOYDEVICEADDED:
-                    # This event will be generated when the program starts for every
-                    # joystick, filling up the list without needing to create them manually.
-                self.joystick_actions = genJoystick()
-                    #print(f"Joystick {joystick_actions.get_instance_id()} connencted")
-            if event.type == pygame.JOYDEVICEREMOVED:
-                del joysticks[event.instance_id]
-                """
-
         self.joystick_actions = genJoystick()
         print("Generic Joystick Initialized \n")
         
@@ -178,21 +152,10 @@ class MainWindow(QtWidgets.QMainWindow):
         #make instance of algorithm class both control and path planning
         self.control_robot = Controller()
         self.path_planner = Path_Planner()
-        
-
-
 
         self.setFile()
         
         pygame.init()
-        #if pygame.joystick.get_count() == 0:
-            #self.tbprint("No Joystick Connected...")
-            
-        #else:
-            #self.joystick = pygame.joystick.Joystick(0)
-            #self.joystick.init()
-            #self.tbprint("Connected to: "+str(self.joystick.get_name()))
-        
       
         self.sensorupdatetimer = QTimer(self)
         self.sensorupdatetimer.timeout.connect(self.update_sensor_label)
