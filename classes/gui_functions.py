@@ -11,7 +11,7 @@ import queue
 import cv2
 import os
 from os.path import expanduser
-import openpyxl 
+#import openpyxl 
 import pandas as pd
 from datetime import datetime
 import sys
@@ -36,7 +36,7 @@ from classes.gui_widgets import Ui_MainWindow
 from classes.robot_class import Robot
 from classes.cell_class import Cell
 from classes.arduino_class import ArduinoHandler
-from classes.joystick_class import genJoystick,Mac_Joystick,Linux_Joystick,Windows_Joystick
+from classes.joystick_class import genJoystick
 from classes.simulation_class import HelmholtzSimulator
 from classes.control_class import Controller
 from classes.path_planning_class import Path_Planner
@@ -142,21 +142,21 @@ class MainWindow(QtWidgets.QMainWindow):
         self.manual_status = False
 
 
-        
-        #if "mac" in platform.platform():
-        #    self.tbprint("Detected OS: macos")
-        #    self.joystick_actions = Mac_Joystick()
-        #elif "Linux" in platform.platform():
-        #    self.tbprint("Detected OS: Linux")
-        #    self.joystick_actions = Linux_Joystick()
-        #elif "Windows" in platform.platform():
-        #    self.tbprint("Detected OS:  Windows")
-        #    self.joystick_actions = Windows_Joystick()
-        #else:
-        #    self.tbprint("undetected operating system")
-        #
-        joysticks = {}
+        """
+        if "mac" in platform.platform():
+            self.tbprint("Detected OS: macos")
+            self.joystick_actions = Mac_Joystick()
+        elif "Linux" in platform.platform():
+            self.tbprint("Detected OS: Linux")
+            self.joystick_actions = Linux_Joystick()
+        elif "Windows" in platform.platform():
+            self.tbprint("Detected OS:  Windows")
+            self.joystick_actions = Windows_Joystick()
+        else:
+            self.tbprint("undetected operating system")
+        """
 
+        """
         for event in pygame.event.get():
             if event.type == pygame.JOYDEVICEADDED:
                     # This event will be generated when the program starts for every
@@ -165,7 +165,10 @@ class MainWindow(QtWidgets.QMainWindow):
                     #print(f"Joystick {joystick_actions.get_instance_id()} connencted")
             if event.type == pygame.JOYDEVICEREMOVED:
                 del joysticks[event.instance_id]
+                """
 
+        self.joystick_actions = genJoystick()
+        print("Generic Joystick Initialized \n")
         
         
         #define, simulator class, pojection class, and acoustic class
@@ -182,13 +185,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setFile()
         
         pygame.init()
-        if pygame.joystick.get_count() == 0:
-            self.tbprint("No Joystick Connected...")
+        #if pygame.joystick.get_count() == 0:
+            #self.tbprint("No Joystick Connected...")
             
-        else:
-            self.joystick = pygame.joystick.Joystick(0)
-            self.joystick.init()
-            self.tbprint("Connected to: "+str(self.joystick.get_name()))
+        #else:
+            #self.joystick = pygame.joystick.Joystick(0)
+            #self.joystick.init()
+            #self.tbprint("Connected to: "+str(self.joystick.get_name()))
         
       
         self.sensorupdatetimer = QTimer(self)
@@ -198,6 +201,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.by_sensor = 0 
         self.bz_sensor = 0
 
+        self.controller_update_timer = QTimer(self)
+        self.controller_update_timer.timeout.connect(self.update_joystick)
+        self.controller_update_timer.start(25)
      
 
         #tracker tab functions
@@ -313,6 +319,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.bylabel.setText("By: "+str(self.by_sensor))
         self.ui.bzlabel.setText("Bz: "+str(self.bz_sensor))
 
+    def update_joystick(self):
+        self.joystick_actions.update()
+
     
 
     def update_actions_frame(self, displayframe, cell_mask, robot_list, cell_list):
@@ -381,8 +390,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
             
         #if joystick is on use the joystick though
-        elif self.joystick_status == True:
-            type, self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, acoust = self.joystick_actions.run(self.joystick)
+        elif self.joystick_actions.is_active:
+            type, self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, acoust = self.joystick_actions.run()
             self.psi = np.radians(self.ui.psidial.value())
             
             if acoust == 1:
@@ -1189,9 +1198,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.arduino_port = selected_port
         
 
-
+    
 
     def start(self):
+        
 
         if self.ui.startbutton.isChecked():
             #connect to arduino
