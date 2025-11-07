@@ -4,22 +4,28 @@ from classes.gui_functions import MainWindow
 from classes.path_planning_class import Path_Planner
 from classes.simulation_class import HelmholtzSimulator
 
-from classes.gui_widgets import Ui_MainWindow
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QApplication, QFileDialog
+#from classes.gui_widgets import Ui_MainWindow
+#from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import tWidgets # changed to tWidgets to avoid conflict
+
+#from PyQt5.QtWidgets import QApplication, QFileDialog
 import platform
-from PyQt5.QtCore import Qt, QTimer, PYQT_VERSION_STR, QEvent
+#from PyQt5.QtCore import Qt, QTimer, PYQT_VERSION_STR, QEvent
+from PyQt5.QtCore import QTimer, PYQT_VERSION_STR
+
 import pygame
+'''
 try:
     import EasyPySpin
 except Exception:
     pass
+'''
 from classes.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
 from datetime import datetime
 import queue
-from os.path import expanduser
-import os
-from os.path import expanduser
+#from os.path import expanduser // unused import
+#import os // unused import
+#from os.path import expanduser
 from classes.gui_widgets import Ui_MainWindow
 
 
@@ -38,7 +44,7 @@ def __init__(self, parent=None):
         #self.showMaximized()
 
         #resize some widgets to fit the screen better
-        screen  = QtWidgets.QDesktopWidget().screenGeometry(-1)
+        screen  = tWidgets.QDesktopWidget().screenGeometry(-1) #changed to tWidgets to avoid conflict
         
         self.window_width = screen.width()
         self.window_height = screen.height()
@@ -57,23 +63,17 @@ def __init__(self, parent=None):
     
       
         #create folder in homerdiractory of user
-        if "Windows" in platform.platform():
-            home_dir = expanduser("D:")
-            new_dir_name = "Tracking Data"
-            desktop_path = os.path.join(home_dir, "Microrobots")
-            self.new_dir_path = os.path.join(desktop_path, new_dir_name)
-            if not os.path.exists(self.new_dir_path):
-                os.makedirs(self.new_dir_path)
-        else:
-            #home_dir = expanduser("~")
-            #new_dir_name = "Tracking Data"
-            #desktop_path = os.path.join(home_dir, "Desktop")
-            
-            self.new_dir_path = "Data"#os.path.join(desktop_path, new_dir_name)
-            if not os.path.exists(self.new_dir_path):
-                os.makedirs(self.new_dir_path)
-
-
+        # if "Windows" in platform.platform():
+        #     home_dir = expanduser("D:")
+        #     new_dir_name = "Tracking Data"
+        #     desktop_path = os.path.join(home_dir, "Microrobots")
+        #     self.new_dir_path = os.path.join(desktop_path, new_dir_name)
+        #     if not os.path.exists(self.new_dir_path):
+        #         os.makedirs(self.new_dir_path)
+        # else:
+        #     self.new_dir_path = "Data"
+        #     if not os.path.exists(self.new_dir_path):
+        #         os.makedirs(self.new_dir_path)
 
         self.zoom_x, self.zoom_y, self.zoomscale, self.scrollamount = 1,0,0,0
         self.croppedresult = None
@@ -107,7 +107,7 @@ def __init__(self, parent=None):
         
         self.actions = [0,0,0,0,0,0,0,0,0,0,0,0,0]
         self.Bx, self.By, self.Bz = 0,0,0
-        self.Mx, self.My, self.Mz = 0,0,0
+        # self.Mx, self.My, self.Mz = 0, 0, 0  # Unused variable
         self.alpha, self.gamma, self.psi, self.freq = 0,0,0,0
         self.field_magnitude = 100
 
@@ -120,17 +120,17 @@ def __init__(self, parent=None):
 
 
   
-        if "mac" in platform.platform():
-            self.tbprint("Detected OS: macos")
-            self.joystick_actions = Mac_Joystick()
-        elif "Linux" in platform.platform():
-            self.tbprint("Detected OS: Linux")
-            self.joystick_actions = Linux_Joystick()
-        elif "Windows" in platform.platform():
-            self.tbprint("Detected OS:  Windows")
-            self.joystick_actions = Windows_Joystick()
-        else:
-            self.tbprint("undetected operating system")
+        # if "mac" in platform.platform():
+        #     self.tbprint("Detected OS: macos")
+        #     self.joystick_actions = Mac_Joystick()
+        # elif "Linux" in platform.platform():
+        #     self.tbprint("Detected OS: Linux")
+        #     self.joystick_actions = Linux_Joystick()
+        # elif "Windows" in platform.platform():
+        #     self.tbprint("Detected OS:  Windows")
+        #     self.joystick_actions = Windows_Joystick()
+        # else:
+        #     self.tbprint("undetected operating system")
         
 
         
