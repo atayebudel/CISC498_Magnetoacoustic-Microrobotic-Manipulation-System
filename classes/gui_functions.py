@@ -37,6 +37,10 @@ from serial.tools import list_ports
 #os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
+from classes.control_class import Controller
+from classes.path_planning_class import Path_Planner
+from classes.simulation_class import HelmholtzSimulator
+
 #import EasyPySpin
 try:
      import EasyPySpin
