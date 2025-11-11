@@ -37,18 +37,18 @@ from serial.tools import list_ports
 #os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
-import EasyPySpin
-# try:
-#     import EasyPySpin
-# except Exception:
-#     pass
-
-from classes.gui_widgets import Ui_MainWindow
-from classes.arduino_class import ArduinoHandler
-from classes.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
-from classes.simulation_class import HelmholtzSimulator
 from classes.control_class import Controller
 from classes.path_planning_class import Path_Planner
+from classes.simulation_class import HelmholtzSimulator
+
+#import EasyPySpin
+try:
+     import EasyPySpin
+except Exception:
+     pass
+
+from classes.gui_widgets import Ui_MainWindow
+from classes.algorithm_class import AlgorithmHandler
 
 
 
@@ -91,7 +91,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        
+        # Initialize AlgorithmHandler
+        self.algorithm_handler = AlgorithmHandler(self.ui)
+
+        # Access subsystems through AlgorithmHandler
+        self.arduino = self.algorithm_handler.arduino
+        self.simulator = self.algorithm_handler.simulator
+        self.control_robot = self.algorithm_handler.control_robot
+        self.path_planner = self.algorithm_handler.path_planner
+        self.joystick_actions = self.algorithm_handler.joystick_actions
+
+        # Example usage of subsystems
+        self.simulator.start()
+        self.control_robot.reset()
 
         
         
