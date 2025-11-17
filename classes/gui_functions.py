@@ -41,9 +41,7 @@ except Exception:
     pass
 
 from classes.gui_widgets import Ui_MainWindow
-from classes.arduino_send_class import ArduinoSender
-from classes.arduino_receive_class import ArduinoReceiver
-from classes.algorithm_class import AlgorithmHandler  # Import AlgorithmHandler
+from classes.control_panel import ControlPanel
 from classes import tracking_panel
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -64,9 +62,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     Attributes:
         ui (Ui_MainWindow): UI widgets and layout
-        arduino_sender (ArduinoSender): Interface to Arduino hardware controller for sending commands
-        arduino_receiver (ArduinoReceiver): Interface to Arduino hardware controller for receiving data
-        tracker (tracking_panel): Video tracking and analysis
+        control_panel (ControlPanel): Interface to subsystems and Arduino hardware
         simulator (HelmholtzSimulator): Magnetic field visualization
         control_robot (Controller): Autonomous control algorithms
         path_planner (Path_Planner): Path planning algorithms
@@ -84,14 +80,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        # Initialize AlgorithmHandler
-        self.algorithm_handler = AlgorithmHandler(self.ui)
+        # Initialize middleman
+        self.control_panel = ControlPanel(self.ui)
 
-        # Access subsystems through AlgorithmHandler
-        self.simulator = self.algorithm_handler.simulator
-        self.control_robot = self.algorithm_handler.control_robot
-        self.path_planner = self.algorithm_handler.path_planner
-        self.joystick_actions = self.algorithm_handler.joystick_actions
+        # Access subsystems through ControlPanel
+        self.simulator = self.control_panel.simulator
+        self.control_robot = self.control_panel.control_robot
+        self.path_planner = self.control_panel.path_planner
+        self.joystick_actions = self.control_panel.joystick_actions
 
         # Example usage of subsystems
         self.simulator.start()
@@ -144,10 +140,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cap = None
         self.tracker = None
         self.populate_serial_ports()
-        self.arduino_sender = None
-        self.arduino_receiver = None
-        self.arduino_sender_port = None
-        self.arduino_receiver_port = None
 
         #record variables
         self.recorder = None
@@ -185,13 +177,13 @@ class MainWindow(QtWidgets.QMainWindow):
   
         if "mac" in platform.platform():
             self.tbprint("Detected OS: macos")
-            self.joystick_actions = self.algorithm_handler.joystick_actions
+            self.joystick_actions = self.control_panel.joystick_actions
         elif "Linux" in platform.platform():
             self.tbprint("Detected OS: Linux")
-            self.joystick_actions = self.algorithm_handler.joystick_actions
+            self.joystick_actions = self.control_panel.joystick_actions
         elif "Windows" in platform.platform():
             self.tbprint("Detected OS:  Windows")
-            self.joystick_actions = self.algorithm_handler.joystick_actions
+            self.joystick_actions = self.control_panel.joystick_actions
         else:
             self.tbprint("undetected operating system")
         
@@ -199,12 +191,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         
         #define, simulator class, pojection class, and acoustic class
-        self.simulator = self.algorithm_handler.simulator
+        self.simulator = self.control_panel.simulator
 
         
         #make instance of algorithm class both control and path planning
-        self.control_robot = self.algorithm_handler.control_robot
-        self.path_planner = self.algorithm_handler.path_planner
+        self.control_robot = self.control_panel.control_robot
+        self.path_planner = self.control_panel.path_planner
         
 
 
@@ -356,18 +348,17 @@ class MainWindow(QtWidgets.QMainWindow):
         Keep hall sensor labels update behavior unchanged (if used elsewhere).
         """
         # Update coil currents from receiver
-        if self.arduino_receiver is not None:
-            currents = self.arduino_receiver.receive()
-            if isinstance(currents, (list, tuple)) and len(currents) >= 6:
-                try:
-                    self.ui.CoilposX_current.setText(f"+X: {float(currents[0]):.2f}")
-                    self.ui.CoilnegX_current.setText(f"-X: {float(currents[1]):.2f}")
-                    self.ui.CoilposY_current.setText(f"+Y: {float(currents[2]):.2f}")
-                    self.ui.CoilnegY_current.setText(f"-Y: {float(currents[3]):.2f}")
-                    self.ui.CoilposZ_current.setText(f"+Z: {float(currents[4]):.2f}")
-                    self.ui.CoilnegZ_current.setText(f"-Z: {float(currents[5]):.2f}")
-                except Exception:
-                    pass
+        currents = self.control_panel.receive_currents()
+        if isinstance(currents, (list, tuple)) and len(currents) >= 6:
+            try:
+                self.ui.CoilposX_current.setText(f"+X: {float(currents[0]):.2f}")
+                self.ui.CoilnegX_current.setText(f"-X: {float(currents[1]):.2f}")
+                self.ui.CoilposY_current.setText(f"+Y: {float(currents[2]):.2f}")
+                self.ui.CoilnegY_current.setText(f"-Y: {float(currents[3]):.2f}")
+                self.ui.CoilposZ_current.setText(f"+Z: {float(currents[4]):.2f}")
+                self.ui.CoilnegZ_current.setText(f"-Z: {float(currents[5]):.2f}")
+            except Exception:
+                pass
 
         # Keep existing hall sensor labels (values updated elsewhere if applicable)
         self.ui.bxlabel.setText("Bx: "+str(self.bx_sensor))
@@ -759,16 +750,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.simulator.freq = self.freq
         self.simulator.omega = 2 * np.pi * self.simulator.freq
 
-        #send arduino commands via Sender if available
-        if self.arduino_sender is not None:
-            try:
-                self.arduino_sender.send(self.Bx, self.By, self.Bz,
-                                         self.alpha, self.gamma, self.freq, self.psi,
-                                         self.gradient_status, self.equal_field_status,
-                                         self.acoustic_frequency)
-            except Exception:
-                pass
-
+        #send actions via ControlPanel
+        self.control_panel.send_actions(self.Bx, self.By, self.Bz,
+                                        self.alpha, self.gamma, self.freq, self.psi,
+                                        self.gradient_status, self.equal_field_status,
+                                        self.acoustic_frequency)
 
     def toggle_recording(self):
         """Toggle video recording on/off."""
@@ -1258,35 +1244,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def handle_sender_port_change(self, selected_port):
         """Handle Sender Arduino serial port selection."""
-        self.arduino_sender_port = selected_port
-        # (re)connect sender
-        try:
-            if self.arduino_sender is not None:
-                self.arduino_sender.close()
-        except Exception:
-            pass
-        self.arduino_sender = None
-        if selected_port:
-            try:
-                self.arduino_sender = ArduinoSender(port=selected_port)
-            except Exception as e:
-                self.tbprint(f"Sender connect error: {e}")
+        ok = self.control_panel.set_sender_port(selected_port)
+        if not ok:
+            self.tbprint(f"Sender connect error: {selected_port}")
 
     def handle_receiver_port_change(self, selected_port):
         """Handle Receiver Arduino serial port selection."""
-        self.arduino_receiver_port = selected_port
-        # (re)connect receiver
-        try:
-            if self.arduino_receiver is not None:
-                self.arduino_receiver.close()
-        except Exception:
-            pass
-        self.arduino_receiver = None
-        if selected_port:
-            try:
-                self.arduino_receiver = ArduinoReceiver(port=selected_port)
-            except Exception as e:
-                self.tbprint(f"Receiver connect error: {e}")
+        ok = self.control_panel.set_receiver_port(selected_port)
+        if not ok:
+            self.tbprint(f"Receiver connect error: {selected_port}")
 
     def start(self):
         """Start video capture and tracking loop."""
@@ -1578,13 +1544,5 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.simulator.stop()
         
-        try:
-            if self.arduino_sender is not None:
-                self.arduino_sender.close()
-        except Exception:
-            pass
-        try:
-            if self.arduino_receiver is not None:
-                self.arduino_receiver.close()
-        except Exception:
-            pass
+        # Close ControlPanel
+        self.control_panel.close()
