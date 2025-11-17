@@ -41,7 +41,8 @@ except Exception:
     pass
 
 from classes.gui_widgets import Ui_MainWindow
-from classes.arduino_class import ArduinoHandler
+from classes.arduino_send_class import ArduinoSender
+from classes.arduino_receive_class import ArduinoReceiver
 from classes.algorithm_class import AlgorithmHandler  # Import AlgorithmHandler
 from classes import tracking_panel
 
@@ -63,7 +64,8 @@ class MainWindow(QtWidgets.QMainWindow):
     
     Attributes:
         ui (Ui_MainWindow): UI widgets and layout
-        arduino (ArduinoHandler): Interface to Arduino hardware controller
+        arduino_sender (ArduinoSender): Interface to Arduino hardware controller for sending commands
+        arduino_receiver (ArduinoReceiver): Interface to Arduino hardware controller for receiving data
         tracker (tracking_panel): Video tracking and analysis
         simulator (HelmholtzSimulator): Magnetic field visualization
         control_robot (Controller): Autonomous control algorithms
@@ -142,7 +144,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cap = None
         self.tracker = None
         self.populate_serial_ports()
-        self.arduino = None
+        self.arduino_sender = None
+        self.arduino_receiver = None
+        self.arduino_sender_port = None
+        self.arduino_receiver_port = None
 
         #record variables
         self.recorder = None
@@ -217,8 +222,8 @@ class MainWindow(QtWidgets.QMainWindow):
         
       
         self.sensorupdatetimer = QTimer(self)
-        self.sensorupdatetimer.timeout.connect(self.update_sensor_label)
-        self.sensorupdatetimer.start(25)  # Update every 500 ms
+        self.sensorupdatetimer.timeout.connect(self.update_sensor_and_currents)
+        self.sensorupdatetimer.start(250)  # poll periodically
         self.bx_sensor = 0
         self.by_sensor = 0 
         self.bz_sensor = 0
@@ -277,7 +282,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.croppedrecordbutton.clicked.connect(self.croppedrecordfunction)
         self.ui.import_excel_actions.clicked.connect(self.read_excel_actions)
         self.ui.apply_actions.clicked.connect(self.apply_excel_actions)
-        self.ui.arduino_portbox.currentTextChanged.connect(self.handle_port_change)
+        self.ui.arduino_portbox.currentTextChanged.connect(self.handle_sender_port_change)
+        self.ui.arduino_portbox_receiver.currentTextChanged.connect(self.handle_receiver_port_change)
 
         self.ui.cleartrackingbutton.clicked.connect(self.clear_tracking)
 
@@ -344,14 +350,26 @@ class MainWindow(QtWidgets.QMainWindow):
         
     
 
-    def update_sensor_label(self):
+    def update_sensor_and_currents(self):
         """
-        Update the magnetic field sensor display labels.
-        
-        Called periodically by timer to refresh Bx, By, Bz sensor readings
-        from the Arduino hall effect sensors.
+        Poll receiver Arduino for coil currents and update GUI labels.
+        Keep hall sensor labels update behavior unchanged (if used elsewhere).
         """
-        # Replace this with your actual value source
+        # Update coil currents from receiver
+        if self.arduino_receiver is not None:
+            currents = self.arduino_receiver.receive()
+            if isinstance(currents, (list, tuple)) and len(currents) >= 6:
+                try:
+                    self.ui.CoilposX_current.setText(f"+X: {float(currents[0]):.2f}")
+                    self.ui.CoilnegX_current.setText(f"-X: {float(currents[1]):.2f}")
+                    self.ui.CoilposY_current.setText(f"+Y: {float(currents[2]):.2f}")
+                    self.ui.CoilnegY_current.setText(f"-Y: {float(currents[3]):.2f}")
+                    self.ui.CoilposZ_current.setText(f"+Z: {float(currents[4]):.2f}")
+                    self.ui.CoilnegZ_current.setText(f"-Z: {float(currents[5]):.2f}")
+                except Exception:
+                    pass
+
+        # Keep existing hall sensor labels (values updated elsewhere if applicable)
         self.ui.bxlabel.setText("Bx: "+str(self.bx_sensor))
         self.ui.bylabel.setText("By: "+str(self.by_sensor))
         self.ui.bzlabel.setText("Bz: "+str(self.bz_sensor))
@@ -378,13 +396,6 @@ class MainWindow(QtWidgets.QMainWindow):
             robot_list (list): List of tracked Robot objects
             cell_list (list): List of tracked Cell objects
         """
-        #read hall effect sensor data from arduino
-        sensor = self.arduino.receive()
-        self.bx_sensor = -1 * round(sensor[0], 1)   #Bx sensor sign is switched
-        self.by_sensor = round(sensor[1], 1)
-        self.bz_sensor = round(sensor[2], 1)
-
-
         self.frame_number+=1
 
 
@@ -748,8 +759,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.simulator.freq = self.freq
         self.simulator.omega = 2 * np.pi * self.simulator.freq
 
-        #send arduino commands
-        self.arduino.send(self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, self.gradient_status, self.equal_field_status, self.acoustic_frequency)
+        #send arduino commands via Sender if available
+        if self.arduino_sender is not None:
+            try:
+                self.arduino_sender.send(self.Bx, self.By, self.Bz,
+                                         self.alpha, self.gamma, self.freq, self.psi,
+                                         self.gradient_status, self.equal_field_status,
+                                         self.acoustic_frequency)
+            except Exception:
+                pass
 
 
     def toggle_recording(self):
@@ -1222,30 +1240,53 @@ class MainWindow(QtWidgets.QMainWindow):
     
     
     def populate_serial_ports(self):
-        """Scan and populate dropdown with available serial ports for Arduino."""
+        """Scan and populate dropdowns with available serial ports for Arduinos."""
         ports = list_ports.comports()
-        if len(ports) > 0:
-            self.ui.arduino_portbox.clear()
-            for port in ports:
-                self.ui.arduino_portbox.addItem(port.device)
-            self.arduino_port = port.device
-        
-        else:
-            self.arduino_port = None
+        # clear and repopulate both
+        self.ui.arduino_portbox.clear()
+        self.ui.arduino_portbox_receiver.clear()
+        port_names = [p.device for p in ports]
+        for name in port_names:
+            self.ui.arduino_portbox.addItem(name)
+            self.ui.arduino_portbox_receiver.addItem(name)
+        # default selections if available
+        if len(port_names) >= 1:
+            self.arduino_sender_port = port_names[0]
+        if len(port_names) >= 2:
+            self.arduino_receiver_port = port_names[1]
+            self.ui.arduino_portbox_receiver.setCurrentText(port_names[1])
 
-        
+    def handle_sender_port_change(self, selected_port):
+        """Handle Sender Arduino serial port selection."""
+        self.arduino_sender_port = selected_port
+        # (re)connect sender
+        try:
+            if self.arduino_sender is not None:
+                self.arduino_sender.close()
+        except Exception:
+            pass
+        self.arduino_sender = None
+        if selected_port:
+            try:
+                self.arduino_sender = ArduinoSender(port=selected_port)
+            except Exception as e:
+                self.tbprint(f"Sender connect error: {e}")
 
-    def handle_port_change(self, selected_port):
-        """
-        Handle Arduino serial port selection change.
-        
-        Args:
-            selected_port (str): Name of selected serial port
-        """
-        self.arduino_port = selected_port
-        
-
-
+    def handle_receiver_port_change(self, selected_port):
+        """Handle Receiver Arduino serial port selection."""
+        self.arduino_receiver_port = selected_port
+        # (re)connect receiver
+        try:
+            if self.arduino_receiver is not None:
+                self.arduino_receiver.close()
+        except Exception:
+            pass
+        self.arduino_receiver = None
+        if selected_port:
+            try:
+                self.arduino_receiver = ArduinoReceiver(port=selected_port)
+            except Exception as e:
+                self.tbprint(f"Receiver connect error: {e}")
 
     def start(self):
         """Start video capture and tracking loop."""
@@ -1537,6 +1578,13 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.simulator.stop()
         
-        if self.arduino is not None:
-            self.arduino.close()
-            self.apply_actions(False)
+        try:
+            if self.arduino_sender is not None:
+                self.arduino_sender.close()
+        except Exception:
+            pass
+        try:
+            if self.arduino_receiver is not None:
+                self.arduino_receiver.close()
+        except Exception:
+            pass
