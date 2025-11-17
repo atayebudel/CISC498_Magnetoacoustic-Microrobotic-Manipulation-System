@@ -4,7 +4,7 @@ from classes.tracker_class import VideoThread
 from classes.robot_class import Robot
 import os
 from datetime import datetime
-from classes.arduino_class import ArduinoHandler
+# from classes.arduino_class import ArduinoHandler  # removed legacy handler
 from PyQt5 import QtCore, QtWidgets
 
 # Record thread
@@ -140,12 +140,9 @@ def eventFilter(self, object, event):
 
 # Tracker thread
 def start(self):
-    """Start or stop video tracking and Arduino connection"""
+    """Start or stop video tracking"""
     if self.ui.startbutton.isChecked():
-        # Initialize Arduino connection
-        self.arduino = ArduinoHandler(self.tbprint, self.arduino_port)
-        self.arduino.connect()
-
+        # Removed legacy ArduinoHandler connection; Sender/Receiver are managed in MainWindow
         if self.videopath is not None:
             self.frame_number = 0
             self.setFile()
@@ -204,6 +201,3 @@ def start(self):
                 border-color: rgb(255, 0, 0);
                 padding: 6px;
             """)
-
-        if self.arduino is not None:
-            self.arduino.close()

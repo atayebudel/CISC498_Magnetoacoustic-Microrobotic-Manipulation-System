@@ -21,7 +21,6 @@ from os.path import expanduser
 import os
 from os.path import expanduser
 #from classes.gui_widgets import Ui_MainWindow
-from classes.arduino_class import ArduinoHandler # start
 from classes.joystick_class import Mac_Joystick, Linux_Joystick, Windows_Joystick
 from classes.simulation_class import HelmholtzSimulator
 #from classes.control_class import Controller
