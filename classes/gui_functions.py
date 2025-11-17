@@ -42,13 +42,7 @@ except Exception:
 
 from classes.gui_widgets import Ui_MainWindow
 from classes.arduino_class import ArduinoHandler
-from classes.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
-from classes.simulation_class import HelmholtzSimulator
-from classes.control_class import Controller
-from classes.path_planning_class import Path_Planner
-
-
-
+from classes.algorithm_class import AlgorithmHandler  # Import AlgorithmHandler
 from classes import tracking_panel
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -88,11 +82,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        
+        # Initialize AlgorithmHandler
+        self.algorithm_handler = AlgorithmHandler(self.ui)
 
-        
-        
-        #self.showMaximized()
+        # Access subsystems through AlgorithmHandler
+        self.simulator = self.algorithm_handler.simulator
+        self.control_robot = self.algorithm_handler.control_robot
+        self.path_planner = self.algorithm_handler.path_planner
+        self.joystick_actions = self.algorithm_handler.joystick_actions
+
+        # Example usage of subsystems
+        self.simulator.start()
+        self.control_robot.reset()
 
         #resize some widgets to fit the screen better
         screen  = QtWidgets.QDesktopWidget().screenGeometry(-1)
@@ -179,13 +180,13 @@ class MainWindow(QtWidgets.QMainWindow):
   
         if "mac" in platform.platform():
             self.tbprint("Detected OS: macos")
-            self.joystick_actions = Mac_Joystick()
+            self.joystick_actions = self.algorithm_handler.joystick_actions
         elif "Linux" in platform.platform():
             self.tbprint("Detected OS: Linux")
-            self.joystick_actions = Linux_Joystick()
+            self.joystick_actions = self.algorithm_handler.joystick_actions
         elif "Windows" in platform.platform():
             self.tbprint("Detected OS:  Windows")
-            self.joystick_actions = Windows_Joystick()
+            self.joystick_actions = self.algorithm_handler.joystick_actions
         else:
             self.tbprint("undetected operating system")
         
@@ -193,12 +194,12 @@ class MainWindow(QtWidgets.QMainWindow):
         
         
         #define, simulator class, pojection class, and acoustic class
-        self.simulator = HelmholtzSimulator(self.ui.magneticfieldsimlabel, width=310, height=310, dpi=200)
+        self.simulator = self.algorithm_handler.simulator
 
         
         #make instance of algorithm class both control and path planning
-        self.control_robot = Controller()
-        self.path_planner = Path_Planner()
+        self.control_robot = self.algorithm_handler.control_robot
+        self.path_planner = self.algorithm_handler.path_planner
         
 
 

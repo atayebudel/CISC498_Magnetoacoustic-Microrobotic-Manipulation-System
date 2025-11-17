@@ -1,7 +1,6 @@
 # imports from gui_functions.py 
 from classes.control_class import Controller
 #from classes.gui_functions import MainWindow
-from classes.gui_functions import MainWindow
 from classes.path_planning_class import Path_Planner
 from classes.simulation_class import HelmholtzSimulator
 
@@ -21,11 +20,11 @@ import queue
 from os.path import expanduser
 import os
 from os.path import expanduser
-from classes.gui_widgets import Ui_MainWindow
+#from classes.gui_widgets import Ui_MainWindow
 from classes.arduino_class import ArduinoHandler # start
 from classes.joystick_class import Mac_Joystick, Linux_Joystick, Windows_Joystick
 from classes.simulation_class import HelmholtzSimulator
-from classes.control_class import Controller
+#from classes.control_class import Controller
 from classes.path_planning_class import Path_Planner #end
 import platform
 
@@ -45,8 +44,9 @@ class AlgorithmHandler:
         self.ui = ui_main_window
 
         # Initialize subsystems
-        self.arduino = ArduinoHandler()
-        self.simulator = HelmholtzSimulator(self.ui.magneticfieldsimlabel, width=310, height=310, dpi=200)
+        self.simulator = HelmholtzSimulator(
+            self.ui.magneticfieldsimlabel, width=310, height=310, dpi=200
+        )
         self.control_robot = Controller()
         self.path_planner = Path_Planner()
 
