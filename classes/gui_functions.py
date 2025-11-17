@@ -9,18 +9,14 @@ Classes:
 """
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-#from PyQt5.QtWidgets import QApplication, QFileDialog, QWidget
-from PyQt5.QtWidgets import QFileDialog
-#from PyQt5.QtGui import QWheelEvent, QPixmap, QIcon
-from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QApplication, QFileDialog
+import sys
+from PyQt5.QtGui import QWheelEvent
+from PyQt5 import QtGui
+from PyQt5.QtWidgets import QWidget
+from PyQt5.QtGui import QPixmap,QIcon
 from PyQt5.QtCore import Qt, QTimer, PYQT_VERSION_STR, QEvent
-#from PyQt5 import QtCore, QtGui, QtWidgets
-#from PyQt5.QtWidgets import QApplication, QFileDialog
-#from PyQt5.QtGui import QWheelEvent
-#from PyQt5.QtGui import QPixmap, QIcon
-#from PyQt5.QtCore import Qt, QTimer, PYQT_VERSION_STR, QEvent
-#from PyQt5 import QtWidgets, QtGui, QtCore
-#import sys
+from PyQt5 import QtWidgets, QtGui, QtCore
 import queue
 import cv2
 import os
@@ -28,15 +24,26 @@ from os.path import expanduser
 import openpyxl 
 import pandas as pd
 from datetime import datetime
+import sys
+from PyQt5.QtWidgets import QApplication
 import numpy as np
-#import matplotlib.pyplot as plt 
+import cv2
+import matplotlib.pyplot as plt 
 import time
 import platform
 from serial.tools import list_ports
-#os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
-#os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
+try:
+    import EasyPySpin
+except Exception:
+    pass
 
+from classes.gui_widgets import Ui_MainWindow
+from classes.arduino_class import ArduinoHandler
+from classes.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
+from classes.simulation_class import HelmholtzSimulator
 from classes.control_class import Controller
 from classes.path_planning_class import Path_Planner
 from classes.simulation_class import HelmholtzSimulator
@@ -115,7 +122,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.window_width = screen.width()
         self.window_height = screen.height()
         self.resize(self.window_width, self.window_height)
-        self.display_width = self.window_width # self.ui.frameGeometry().width() // this is used for debugging
+        self.display_width = self.window_width# self.ui.frameGeometry().width()
 
         self.displayheightratio = 0.79
         self.framesliderheightratio = 0.031
@@ -127,9 +134,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize_widgets()
 
     
-        '''
-        Note: create folder in home directory of user and is being repeated
-
+      
         #create folder in homerdiractory of user
         if "Windows" in platform.platform():
             home_dir = expanduser("D:")
@@ -146,7 +151,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.new_dir_path = "Data"#os.path.join(desktop_path, new_dir_name)
             if not os.path.exists(self.new_dir_path):
                 os.makedirs(self.new_dir_path)
-        '''
 
 
 
@@ -182,7 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.actions = [0,0,0,0,0,0,0,0,0,0,0,0,0]
         self.Bx, self.By, self.Bz = 0,0,0
-        # self.Mx, self.My, self.Mz = 0,0,0 // I don't think this is used anywhere
+        self.Mx, self.My, self.Mz = 0,0,0
         self.alpha, self.gamma, self.psi, self.freq = 0,0,0,0
         self.field_magnitude = 100
 
@@ -194,19 +198,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.manual_status = False
 
 
-    # The joystick initialization code has been commented out for now bc it is being repeated. 
-
-        # if "mac" in platform.platform():
-        #     self.tbprint("Detected OS: macos")
-        #     self.joystick_actions = Mac_Joystick()
-        # elif "Linux" in platform.platform():
-        #     self.tbprint("Detected OS: Linux")
-        #     self.joystick_actions = Linux_Joystick()
-        # elif "Windows" in platform.platform():
-        #     self.tbprint("Detected OS:  Windows")
-        #     self.joystick_actions = Windows_Joystick()
-        # else:
-        #     self.tbprint("undetected operating system")
+  
+        if "mac" in platform.platform():
+            self.tbprint("Detected OS: macos")
+            self.joystick_actions = Mac_Joystick()
+        elif "Linux" in platform.platform():
+            self.tbprint("Detected OS: Linux")
+            self.joystick_actions = Linux_Joystick()
+        elif "Windows" in platform.platform():
+            self.tbprint("Detected OS:  Windows")
+            self.joystick_actions = Windows_Joystick()
+        else:
+            self.tbprint("undetected operating system")
         
 
         
@@ -1455,9 +1458,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.resize_widgets()
  
     def resize_widgets(self):
-        '''
-            Note: Some of these are Duplicates:
-            
+        """
+        Adjust widget sizes and positions based on current window size.
+        
+        Maintains aspect ratio of video display and scales UI elements proportionally.
+        """
         self.display_height = int(self.window_height*self.displayheightratio) #keep this fixed, changed the width dpending on the aspect ratio
         self.framesliderheight = int(self.window_height*self.framesliderheightratio)
         self.textheight = int(self.window_height*self.textheightratio)
@@ -1466,11 +1471,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.framesliderheight = int(self.window_height*self.framesliderheightratio)
         self.textheight = int(self.window_height*self.textheightratio)
         self.tabheight = self.window_height*self.tabheightratio
-        '''
-        self.display_height = int(self.window_height * self.displayheightratio)
-        self.framesliderheight = int(self.window_height * self.framesliderheightratio)
-        self.textheight = int(self.window_height * self.textheightratio)
-        self.tabheight = self.window_height * self.tabheightratio
 
         self.display_width = int(self.display_height * self.aspectratio)
 
