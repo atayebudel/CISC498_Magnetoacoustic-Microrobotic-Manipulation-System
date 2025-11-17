@@ -20,6 +20,12 @@ class genJoystick: #generic
     def is_active(self):
         return self.joysticks.len() > 0
 
+    """
+    Iterates along ongoing pygame events and looks for anything pertaining to the
+    addition/removal of a controller
+    If added, create a new instance in the joysticks array
+    If removed, delete the corresponding instance
+    """
     def update(self):
         for event in pygame.event.get():
             if event.type == pygame.JOYDEVICEADDED:
@@ -52,19 +58,19 @@ class genJoystick: #generic
             #axis condition
             if event.type == pygame.JOYAXISMOTION:
                 # Joystick movement event
-                if event.axis == 1:  #LY
+                if event.axis == 1:  # Left stick Y
                     ly = -self.deadzone(event.value)
                     self.By = round(ly,3)
                     print("LY")
                 
                     
-                if event.axis == 0: #LX
+                if event.axis == 0: # Left stick X
                     lx = self.deadzone(event.value)
                     self.Bx = round(lx,3)
                     print("LX")
             
 
-                if event.axis == 2 or event.axis == 3: #RY
+                if event.axis == 2 or event.axis == 3: # Right stick Y
                     ry = -self.deadzone(joystick.get_axis(3))
                     rx = self.deadzone(joystick.get_axis(2))
                     
@@ -86,43 +92,46 @@ class genJoystick: #generic
                         self.freq = int(np.sqrt((rx)**2 + (ry)**2)*40)
                     
 
-                if event.axis == 4: #LT
+                if event.axis == 4: # LT
                     lt = round(event.value,2)
                     f = interpolate.interp1d([-1,1], [0,1])  #need to map the -1 to 1 output to 0-1
                     self.Bz = -round(float(f(lt)),3)
                     
 
-                if event.axis == 5: #RT
+                if event.axis == 5: # RT
                     rt = round(event.value,2)
                     f = interpolate.interp1d([-1,1], [0,1])  #need to map the -1 to 1 output to 0-1
                     self.Bz = round(float(f(rt)),3)
     
-            #button condition
+            # Button condition
+            # Good documentation for button binding in pygame:
+            # https://www.pygame.org/docs/ref/joystick.html#module-pygame.joystick
+            # Use this if buttons are not behaving as they should
             elif event.type == pygame.JOYBUTTONDOWN:
-                # Joystick button press event
+                # Joystick button press event (Playstation / Xbox)
                 button = event.button
-                if button == 0: #X
+                if button == 0: # Cross / A
                     self.acoustic_frequency = 1
-                    print("X")
-                if button == 1: #circle
-                    self.typ = 2 #spin counter clockwise
+                if button == 1: # Circle / B
+                    self.typ = 2 # Spin counter clockwise
                     self.freq = 1
-                    print("CIRCLE")
-                if button == 2: #square
+                if button == 2: # Square / X
                     self.typ = 1 #spin clockwise
                     self.freq = 1
-                    print("SQUARE")
-                if button == 3: #triangle
+                if button == 3: # Triangle / Y
                     pass
-                if button == 9: #lb
+                if button == 4: # LB
                     self.Bz = -1
-                if button == 10: #rb
+                if button == 5: # RB
                     self.Bz = 1
-                if button == 11: #up
+                
+                if button == 11: # Up
                     self.Mx = 1
-                if button == 12: #down
+                if button == 12: # Down
                     self.My = 1
-                if button == 14: #right
+                if button == 13: # Left
+                    pass
+                if button == 14: # Right
                     self.Mz = 1
                 
             

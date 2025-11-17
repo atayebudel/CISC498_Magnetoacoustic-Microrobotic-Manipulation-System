@@ -11,7 +11,7 @@ import queue
 import cv2
 import os
 from os.path import expanduser
-#import openpyxl 
+import openpyxl 
 import pandas as pd
 from datetime import datetime
 import sys
@@ -26,7 +26,7 @@ os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 try:
-    import EasyPySpin
+    import EasyPySpin # type: ignore
 except Exception:
     pass
 
@@ -141,6 +141,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.joystick_status = False
         self.manual_status = False
 
+        #Sets the GUI's controller to be the generic catch-all class
         self.joystick_actions = genJoystick()
         print("Generic Joystick Initialized \n")
         
@@ -159,14 +160,15 @@ class MainWindow(QtWidgets.QMainWindow):
       
         self.sensorupdatetimer = QTimer(self)
         self.sensorupdatetimer.timeout.connect(self.update_sensor_label)
-        self.sensorupdatetimer.start(25)  # Update every 500 ms
+        self.sensorupdatetimer.start(25)  # How often the sensors update (in msec)
         self.bx_sensor = 0
         self.by_sensor = 0 
         self.bz_sensor = 0
 
+        #Controller update functions
         self.controller_update_timer = QTimer(self)
         self.controller_update_timer.timeout.connect(self.update_joystick)
-        self.controller_update_timer.start(25)
+        self.controller_update_timer.start(25) #How often the joysticks update (in msec)
      
 
         #tracker tab functions
@@ -282,6 +284,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.bylabel.setText("By: "+str(self.by_sensor))
         self.ui.bzlabel.setText("Bz: "+str(self.bz_sensor))
 
+    # Honestly should just call it directly instead of through this function
     def update_joystick(self):
         self.joystick_actions.update()
 
