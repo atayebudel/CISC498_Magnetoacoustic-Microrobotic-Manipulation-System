@@ -1,50 +1,61 @@
-import serial
 import threading
 import time
+from pySerialTransfer import pySerialTransfer as txfer
 
 
 class ArduinoSender:
     """
     Handles connection and command transmission to the 'Sender' Arduino.
 
-    Sends actuation commands as a simple CSV line:
-    Bx,By,Bz,alpha,gamma,freq,psi,gradient,equal_field,acoustic\n
+    Sends actuation commands as a binary packet.
     """
     def __init__(self, port: str, baudrate: int = 115200, timeout: float = 0.05):
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self._ser = None
+        self._link = None
         self._lock = threading.Lock()
         self._open()
 
     def _open(self):
-        self._ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-        # small delay for Arduino reset
-        time.sleep(2.0)
+        try:
+            self._link = txfer.SerialTransfer(self.port, baudrate=self.baudrate)
+            time.sleep(2.0)
+        except Exception:
+            self._link = None
 
     @property
     def connected(self) -> bool:
-        return self._ser is not None and self._ser.is_open
+        return getattr(self, "_link", None) is not None
 
     def send(self, Bx, By, Bz, alpha, gamma, freq, psi, gradient, equal_field, acoustic):
         """
-        Send actuation command packet (CSV encoded).
+        Send actuation command packet (binary encoded).
         Values are floats/ints; Arduino must parse accordingly.
         """
         if not self.connected:
             return
-        line = f"{Bx:.6f},{By:.6f},{Bz:.6f},{alpha:.6f},{gamma:.6f},{freq:.6f},{psi:.6f},{int(gradient)},{int(equal_field)},{float(acoustic):.2f}\n"
-        data = line.encode("utf-8", errors="ignore")
-        with self._lock:
-            self._ser.write(data)
-            # optional flush
-            self._ser.flush()
+        try:
+            idx = 0
+            idx = self._link.tx_obj(float(Bx), start_pos=idx)
+            idx = self._link.tx_obj(float(By), start_pos=idx)
+            idx = self._link.tx_obj(float(Bz), start_pos=idx)
+            idx = self._link.tx_obj(float(alpha), start_pos=idx)
+            idx = self._link.tx_obj(float(gamma), start_pos=idx)
+            idx = self._link.tx_obj(float(freq), start_pos=idx)
+            idx = self._link.tx_obj(float(psi), start_pos=idx)
+            idx = self._link.tx_obj(int(gradient), start_pos=idx)
+            idx = self._link.tx_obj(int(equal_field), start_pos=idx)
+            idx = self._link.tx_obj(float(acoustic), start_pos=idx)
+            with self._lock:
+                self._link.send(idx)
+        except Exception:
+            pass
 
     def close(self):
         with self._lock:
-            if self._ser is not None:
+            if getattr(self, "_link", None) is not None:
                 try:
-                    self._ser.close()
+                    self._link.close()
                 finally:
-                    self._ser = None
+                    self._link = None

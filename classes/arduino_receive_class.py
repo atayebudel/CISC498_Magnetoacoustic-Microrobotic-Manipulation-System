@@ -1,7 +1,7 @@
-import serial
 import threading
 import time
 from typing import List
+from pySerialTransfer import pySerialTransfer as txfer
 
 
 class ArduinoReceiver:
@@ -18,19 +18,20 @@ class ArduinoReceiver:
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self._ser = None
         self._lock = threading.Lock()
         self._last_currents: List[float] = [0.0] * 6
         self._open()
 
     def _open(self):
-        self._ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
-        # allow Arduino time to reset
-        time.sleep(2.0)
+        try:
+            self._link = txfer.SerialTransfer(self.port, baudrate=self.baudrate)
+            time.sleep(2.0)
+        except Exception:
+            self._link = None
 
     @property
     def connected(self) -> bool:
-        return self._ser is not None and self._ser.is_open
+        return getattr(self, "_link", None) is not None
 
     def receive(self):
         """
@@ -41,25 +42,25 @@ class ArduinoReceiver:
             return self._last_currents
         try:
             with self._lock:
-                raw = self._ser.readline()
-            if not raw:
-                return self._last_currents
-            line = raw.decode("utf-8", errors="ignore").strip()
-            parts = [p.strip() for p in line.split(",") if p.strip() != ""]
-            if len(parts) >= 6:
-                vals = []
-                for i in range(6):
-                    vals.append(float(parts[i]))
-                self._last_currents = vals[:6]
+                if self._link.available():
+                    idx = 0
+                    vals = []
+                    for _ in range(6):
+                        v = self._link.rx_obj(obj_type='f', start_pos=idx)
+                        # float size = 4 bytes
+                        idx += 4
+                        vals.append(float(v))
+                    if len(vals) == 6:
+                        self._last_currents = vals
+                # ignore status checks; keep last value if no packet
         except Exception:
-            # swallow parse/IO errors and keep last good value
             pass
         return self._last_currents
 
     def close(self):
         with self._lock:
-            if self._ser is not None:
+            if getattr(self, "_link", None) is not None:
                 try:
-                    self._ser.close()
+                    self._link.close()
                 finally:
-                    self._ser = None
+                    self._link = None
