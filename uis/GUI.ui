@@ -2032,7 +2032,7 @@ font-size: 10pt;</string>
        </size>
       </property>
       <property name="text">
-       <string>Acuation Arduino Port:</string>
+       <string>Actuation Arduino Port:</string>
       </property>
      </widget>
      <widget class="QComboBox" name="arduino_portbox_sender">

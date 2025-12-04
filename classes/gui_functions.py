@@ -853,20 +853,20 @@ class MainWindow(QtWidgets.QMainWindow):
             
         #create sheet for magneti field actions
         self.magnetic_field_sheet = self.output_workbook.create_sheet(title="Magnetic Field Actions")#self.output_workbook.active
-        self.magnetic_field_sheet.append(["Frame", "Time(s)", "Bx (%)", "By (%)", "Bz (%)", "Alpha (rad)", "Gamma (rad)", "Rolling Frequency (Hz)", "Psi (rad)", "Gradient?","Equal Field?", "Acoustic Frequency (Hz)","Current1", "Current2", "Current3", "Current4", "Current5", "Current6"])
+        self.magnetic_field_sheet.append(["Frame", "Time(s)", "Bx (%)", "By (%)", "Bz (%)", "Alpha (rad)", "Gamma (rad)", "Rolling Frequency (Hz)", "Psi (rad)", "Gradient?","Equal Field?", "Acoustic Frequency (Hz)","I(A) +Y", "I(A) +X", "I(A) -Y", "I(A) -X", "I(A) +Z", "I(A) -Z"])
 
         #create sheet for robot data
         self.robot_params_sheets = []
         for i in range(len(self.robots)):
             robot_sheet = self.output_workbook.create_sheet(title= "Robot {}".format(i+1))
-            robot_sheet.append(["Frame", "Time(s)", "Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Acc X (um/s2)", "Acc Y (um/s2)", "Acc Mag (um/s2)", "Blur", "Area (um^2)","pixel2um","Path X (um)", "Path Y (um)"])
+            robot_sheet.append(["Frame", "Time(s)", "Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Acc X (um/s2)", "Acc Y (um/s2)", "Acc Mag (um/s2)", "Blur", "Area (um^2)", "pixel2um","Path X (um)", "Path Y (um)"])
             self.robot_params_sheets.append(robot_sheet)
         
         #create sheet for robot data
         self.cell_params_sheets = []
         for i in range(len(self.cells)):
             cell_sheet = self.output_workbook.create_sheet(title= "Cell {}".format(i+1))
-            cell_sheet.append(["Frame","Time(s)","Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Blur", "Area (um^2)","pixel2um"])
+            cell_sheet.append(["Frame","Time(s)","Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Blur", "Area (um^2)", "pixel2um"])
             self.cell_params_sheets.append(cell_sheet)
 
         #tell update_actions function to start appending data to the sheets
