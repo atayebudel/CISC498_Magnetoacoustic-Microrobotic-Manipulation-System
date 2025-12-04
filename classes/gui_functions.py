@@ -303,21 +303,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-        #MAKE GRAPH
+        #MAKE CURRENT GRAPH
         self.plotWidget = pg.PlotWidget()
         self.plotWidget.setBackground('w')  # optional: white background
-        self.plotWidget.showGrid(x=True, y=True)
+        self.plotWidget.showGrid(x=True, y=False)
         self.plotWidget.setLabel('left', 'Current (A)')
         self.plotWidget.setLabel('bottom', 'Coils')
         self.plotWidget.setYRange(min=-5, max=5)
-
-       
         legend = self.plotWidget.addLegend(offset=(10, 10))
-
-
-
-
-
         self.x_vals = np.arange(6)
 
         self.curves = []
@@ -334,32 +327,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.plotWidget.addItem(self.bar_graph)
 
         # Add axis labels
-        ax = self.plotWidget.getAxis('bottom')
-        ax.setTicks([ list(zip(self.x_vals, labels)) ])
+        self.ax = self.plotWidget.getAxis('bottom')
+        self.ax.setTicks([ list(zip(self.x_vals, labels)) ])
 
         self.ui.verticalLayout.addWidget(self.plotWidget)
 
-        
-
-
-
-
-
-
-
-
-    def toggle_coil_currents_function(self):
-        """
-        Toggle the display of coil current data on the plot.
-        """
-        if self.ui.coilcurrenttogglebutton.isChecked():
-            self.ui.coilcurrenttogglebutton.setText("Stop Coil Currents")
-            self.arduino_receive_timer.start(20)   #25msec timer to read arduino data
-        
-        else:
-            self.ui.coilcurrenttogglebutton.setText("Plot Coil Currents")
-            self.arduino_receive_timer.stop()   #25msec timer to read arduino data
-            
+    
     def read_receive_arduino(self):
         """
         Poll receiver Arduino for coil currents and update GUI labels.
@@ -388,6 +361,18 @@ class MainWindow(QtWidgets.QMainWindow):
 
     #def update_joystick(self):
     #    self.joystick_actions.update()
+
+    def toggle_coil_currents_function(self):
+        """
+        Toggle the display of coil current data on the plot.
+        """
+        if self.ui.coilcurrenttogglebutton.isChecked():
+            self.ui.coilcurrenttogglebutton.setText("Stop Coil Currents")
+            self.arduino_receive_timer.start(20)   #25msec timer to read arduino data
+        
+        else:
+            self.ui.coilcurrenttogglebutton.setText("Plot Coil Currents")
+            self.arduino_receive_timer.stop()   #25msec timer to read arduino data
 
         
 
@@ -443,8 +428,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 points.append(points[0])
                 self.tracker.robot_list[-1].trajectory = points 
         
-    
-
     
 
     

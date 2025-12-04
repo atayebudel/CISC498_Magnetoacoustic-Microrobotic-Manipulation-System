@@ -5,9 +5,10 @@ import sys
 from classes.gui_functions import MainWindow
 
 
-# test joystick
-# figure out sign of current when polairty changes
 
+# maybe allow for setting activating each coil instead of BX BY BZ (x6)
+# add acoustic electronics
+# add current lables in plot
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

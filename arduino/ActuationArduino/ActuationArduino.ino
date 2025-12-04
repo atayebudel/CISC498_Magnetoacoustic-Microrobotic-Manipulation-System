@@ -24,9 +24,6 @@ float psi;
 float gradient_status;
 float equal_field_status;
 float acoustic_frequency;
-float nullvalue;
-
-
 
 
 int phase = 0; 
@@ -126,11 +123,11 @@ void setup()
 
 
   cli();
-  TCCR1B = (TCCR1B & 0b11111000) | 0x02; //31.37255 [kHz] pin 12,11
-  TCCR2B = (TCCR2B & 0b11111000) | 0x02; //31.37255 [kHz] pin 10,9
-  TCCR3B = (TCCR3B & 0b11111000) | 0x02; //31.37255 [kHz] pin 5,3,2
-  TCCR4B = (TCCR4B & 0b11111000) | 0x02; //31.37255 [kHz] pin 8,7,6
-  TCCR5B = (TCCR5B & 0b11111000) | 0x02; //31.37255 [kHz] pin 44,45,46   
+  TCCR1B = (TCCR1B & 0b11111000) | 0x01; //31.37255 ->0x01 [kHz] pin 12,11
+  TCCR2B = (TCCR2B & 0b11111000) | 0x01; //31.37255 ->0x01 [kHz] pin 10,9
+  TCCR3B = (TCCR3B & 0b11111000) | 0x01; //31.37255 ->0x01 [kHz] pin 5,3,2
+  TCCR4B = (TCCR4B & 0b11111000) | 0x01; //31.37255 ->0x01 [kHz] pin 8,7,6
+  TCCR5B = (TCCR5B & 0b11111000) | 0x01; //31.37255 ->0x01 [kHz] pin 44,45,46   
   sei();
   
   Serial.begin(115200);
