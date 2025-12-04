@@ -1,7 +1,7 @@
 from PyQt5.QtCore import pyqtSignal, pyqtSlot, Qt, QThread,QTimer
 import numpy as np
 import cv2
-from classes.pushing_algorithm import pushing_algorithm
+from classes.Control.pushing_algorithm import pushing_algorithm
 
 
 
@@ -10,7 +10,6 @@ class Controller:
     def __init__(self):
         self.reset()
      
-        
 
     def reset(self):
         self.node = 0
@@ -133,21 +132,6 @@ class Controller:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     def run_push(self, frame, robot_list, cell_list, arrivalthresh, corridor_width,approach_distance, spinning_freq, pushingfreq, pixel2um):
 
         #run pushing algorithm
@@ -158,13 +142,6 @@ class Controller:
         return frame, self.actions
 
 
-
-
-
-
-
-
-        
 
 
     def find_optimal_acoustic_freq(self, robot_list, pixel2um):

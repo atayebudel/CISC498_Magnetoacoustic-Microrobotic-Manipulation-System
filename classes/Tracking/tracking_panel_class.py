@@ -1,10 +1,9 @@
-from classes.record_class import RecordThread
-from classes.cell_class import Cell
-from classes.tracker_class import VideoThread
-from classes.robot_class import Robot
+from classes.Tracking.record_class import RecordThread
+from classes.Tracking.cell_class import Cell
+from classes.Tracking.tracker_class import VideoThread
+from classes.Tracking.robot_class import Robot
 import os
 from datetime import datetime
-# from classes.arduino_class import ArduinoHandler  # removed legacy handler
 from PyQt5 import QtCore, QtWidgets
 
 # Record thread

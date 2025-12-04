@@ -134,9 +134,9 @@ if __name__ == "__main__":
         print(text)
 
 
-    PORT = "/dev/cu.usbmodem21101"
-    arduino = ArduinoHandler(tbprint)
-    arduino.connect(PORT)
+    PORT = "/dev/cu.usbmodem1101"
+    arduino = ArduinoHandler(tbprint, PORT)
+
     time.sleep(1)
     
     

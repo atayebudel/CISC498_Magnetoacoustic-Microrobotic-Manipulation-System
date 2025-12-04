@@ -5,12 +5,8 @@ import sys
 from classes.gui_functions import MainWindow
 
 
-# Convert blur into z position
-
-# put RRT trajectory in seperate thead
-# add joystick when camera is off. see above
-# calibrate x and y z coils by adding a calbration value
-# add a track all feature
+# test joystick
+# figure out sign of current when polairty changes
 
 
 if __name__ == "__main__":

@@ -1,23 +1,19 @@
-from classes.algorithm_class import AlgorithmHandler
-from classes.arduino_send_class import ArduinoSender
-from classes.arduino_receive_class import ArduinoReceiver
+from classes.arduino.arduino_send_class import ArduinoSender
+from classes.arduino.arduino_receive_class import ArduinoReceiver
 
-class ControlPanel:
+class ArduinoHandler:
     """
-    Middleman between GUI and subsystems (algorithms + Arduinos).
-    GUI should call this instead of directly touching AlgorithmHandler / Arduino classes.
+    Middleman between GUI and Arduinos).
+    GUI should call this instead of directly touching Arduino subclasses.
     """
     def __init__(self, ui):
         self.ui = ui
-        # algorithms
-        self.algorithm_handler = AlgorithmHandler(ui)
-        self.simulator = self.algorithm_handler.simulator
-        self.control_robot = self.algorithm_handler.control_robot
-        self.path_planner = self.algorithm_handler.path_planner
-        self.joystick_actions = self.algorithm_handler.joystick_actions
+        
         # hardware
         self._arduino_sender = None
         self._arduino_receiver = None
+
+
 
     # Arduino Sender
     def set_sender_port(self, port: str):
@@ -25,8 +21,10 @@ class ControlPanel:
         if port:
             try:
                 self._arduino_sender = ArduinoSender(port=port)
+                print(f"Connected to Sender Arduino on port {port}")
             except Exception:
                 self._arduino_sender = None
+                print(f"Could not connect to Sender Arduino on port {port}")
                 return False
         return True
 
@@ -36,8 +34,10 @@ class ControlPanel:
         if port:
             try:
                 self._arduino_receiver = ArduinoReceiver(port=port)
+                print(f"Connected to Receiver Arduino on port {port}")
             except Exception:
                 self._arduino_receiver = None
+                print(f"Could not connect to Receiver Arduino on port {port}")
                 return False
         return True
 
@@ -49,11 +49,12 @@ class ControlPanel:
                                           gradient, equal_field, acoustic)
             except Exception:
                 pass  # swallow hardware errors
+                
 
     def receive_currents(self):
         if self._arduino_receiver is not None:
             try:
-                return self._arduino_receiver.receive()
+                return self._arduino_receiver.read()
             except Exception:
                 return None
         return None

@@ -7,7 +7,7 @@ for controlling and tracking microrobots using magnetic and acoustic fields.
 Classes:
     MainWindow: Main application window with video tracking, control, and data recording.
 """
-
+import pyqtgraph as pg
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QApplication, QFileDialog
 import sys
@@ -31,6 +31,7 @@ import cv2
 import matplotlib.pyplot as plt 
 import time
 import platform
+from collections import deque
 from serial.tools import list_ports
 os.environ["SDL_JOYSTICK_ALLOW_BACKGROUND_EVENTS"] = "1"
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
@@ -41,8 +42,14 @@ except Exception:
     pass
 
 from classes.gui_widgets import Ui_MainWindow
-from classes.control_panel import ControlPanel
-from classes import tracking_panel
+from classes.arduino.arduino_handler_class import ArduinoHandler
+from classes.Tracking import tracking_panel_class  
+from classes.Control.control_class import Controller
+from classes.Control.path_planning_class import Path_Planner
+from classes.Control.simulation_class import HelmholtzSimulator
+from classes.Control.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
+
+#from classes.Control.genjoystick_class import genJoystick
 
 class MainWindow(QtWidgets.QMainWindow):
     """
@@ -62,7 +69,7 @@ class MainWindow(QtWidgets.QMainWindow):
     
     Attributes:
         ui (Ui_MainWindow): UI widgets and layout
-        control_panel (ControlPanel): Interface to subsystems and Arduino hardware
+        arduino_handler (ArduinoHandler): Interface to Arduino hardware
         simulator (HelmholtzSimulator): Magnetic field visualization
         control_robot (Controller): Autonomous control algorithms
         path_planner (Path_Planner): Path planning algorithms
@@ -80,18 +87,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
 
-        # Initialize middleman
-        self.control_panel = ControlPanel(self.ui)
+        # Initialize middleman Arduino handler
+        self.arduino_handler = ArduinoHandler(self.ui)
 
-        # Access subsystems through ControlPanel
-        self.simulator = self.control_panel.simulator
-        self.control_robot = self.control_panel.control_robot
-        self.path_planner = self.control_panel.path_planner
-        self.joystick_actions = self.control_panel.joystick_actions
+        self.simulator = HelmholtzSimulator(
+            self.ui.magneticfieldsimlabel, width=310, height=310, dpi=200
+        )
+        
+        self.control_robot = Controller()
+        self.path_planner = Path_Planner()
 
-        # Example usage of subsystems
-        self.simulator.start()
-        self.control_robot.reset()
 
         #resize some widgets to fit the screen better
         screen  = QtWidgets.QDesktopWidget().screenGeometry(-1)
@@ -140,6 +145,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.cap = None
         self.tracker = None
         self.populate_serial_ports()
+        self.starttime = time.time()
+
+
 
         #record variables
         self.recorder = None
@@ -165,6 +173,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.Mx, self.My, self.Mz = 0,0,0
         self.alpha, self.gamma, self.psi, self.freq = 0,0,0,0
         self.field_magnitude = 100
+        
 
       
         #control tab functions
@@ -174,35 +183,18 @@ class MainWindow(QtWidgets.QMainWindow):
         self.manual_status = False
 
 
-  
         if "mac" in platform.platform():
             self.tbprint("Detected OS: macos")
-            self.joystick_actions = self.control_panel.joystick_actions
+            self.joystick_actions = Mac_Joystick()
         elif "Linux" in platform.platform():
             self.tbprint("Detected OS: Linux")
-            self.joystick_actions = self.control_panel.joystick_actions
+            self.joystick_actions = Linux_Joystick()
         elif "Windows" in platform.platform():
             self.tbprint("Detected OS:  Windows")
-            self.joystick_actions = self.control_panel.joystick_actions
+            self.joystick_actions = Windows_Joystick()
         else:
             self.tbprint("undetected operating system")
-        
 
-        
-        
-        #define, simulator class, pojection class, and acoustic class
-        self.simulator = self.control_panel.simulator
-
-        
-        #make instance of algorithm class both control and path planning
-        self.control_robot = self.control_panel.control_robot
-        self.path_planner = self.control_panel.path_planner
-        
-
-
-
-        self.setFile()
-        
         pygame.init()
         if pygame.joystick.get_count() == 0:
             self.tbprint("No Joystick Connected...")
@@ -212,15 +204,36 @@ class MainWindow(QtWidgets.QMainWindow):
             self.joystick.init()
             self.tbprint("Connected to: "+str(self.joystick.get_name()))
         
-      
-        self.sensorupdatetimer = QTimer(self)
-        self.sensorupdatetimer.timeout.connect(self.update_sensor_and_currents)
-        self.sensorupdatetimer.start(250)  # poll periodically
-        self.bx_sensor = 0
-        self.by_sensor = 0 
-        self.bz_sensor = 0
 
-     
+
+        #Sets the GUI's controller to be the generic catch-all class
+        #self.joystick_actions = genJoystick()
+        #pygame.init()
+
+        #joystick update functions
+        #self.joystick_update_timer = QTimer(self)
+        #self.joystick_update_timer.timeout.connect(self.update_joystick)
+        #self.joystick_update_timer.start(25) #How often the joysticks update (in msec)
+
+
+        # create a timer that continously reads the receive arduino incoming data
+        self.arduino_receive_timer = QTimer(self)
+        self.arduino_receive_timer.timeout.connect(self.read_receive_arduino)
+        #self.arduino_receive_timer.start(25)   #25msec timer to read arduino data
+        self.coil1_current = 0
+        self.coil2_current = 0
+        self.coil3_current = 0
+        self.coil4_current = 0
+        self.coil5_current = 0
+        self.coil6_current = 0
+
+
+    
+        # connect to camera or video file
+        self.setFile()
+
+
+        
 
         #tracker tab functions
         self.ui.pausebutton.hide()
@@ -233,33 +246,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.leftbutton.clicked.connect(self.frameleft)
         self.ui.maskbutton.clicked.connect(self.showmask)
         self.ui.maskinvert_checkBox.toggled.connect(self.invertmaskcommand)
-        self.ui.robotmasklowerbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.robotmaskupperbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.robotmaskdilationbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.robotmaskblurbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.robotcroplengthbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.cellmasklowerbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.cellmaskupperbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.cellmaskdilationbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.cellmaskblurbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.cellcroplengthbox.valueChanged.connect(self.get_slider_vals)
+        self.ui.robotmasklowerbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.robotmaskupperbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.robotmaskdilationbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.robotmaskblurbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.robotcroplengthbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.cellmasklowerbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.cellmaskupperbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.cellmaskdilationbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.cellmaskblurbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.cellcroplengthbox.valueChanged.connect(self.get_widget_vals)
         self.ui.gradient_status_checkbox.toggled.connect(self.gradientcommand)
         self.ui.equal_field_checkbox.toggled.connect(self.equalfieldcommand)
         self.ui.savedatabutton.clicked.connect(self.savedata)
         self.ui.VideoFeedLabel.installEventFilter(self)
         self.ui.recordbutton.clicked.connect(self.toggle_recording)
         self.ui.controlbutton.clicked.connect(self.toggle_control_status)
-        self.ui.memorybox.valueChanged.connect(self.get_slider_vals)
-        self.ui.RRTtreesizebox.valueChanged.connect(self.get_slider_vals)
-        self.ui.arrivalthreshbox.valueChanged.connect(self.get_slider_vals)
-        self.ui.magneticfrequencydial.valueChanged.connect(self.get_slider_vals)
-        self.ui.gammadial.valueChanged.connect(self.get_slider_vals)
-        self.ui.psidial.valueChanged.connect(self.get_slider_vals)
+        self.ui.memorybox.valueChanged.connect(self.get_widget_vals)
+        self.ui.RRTtreesizebox.valueChanged.connect(self.get_widget_vals)
+        self.ui.arrivalthreshbox.valueChanged.connect(self.get_widget_vals)
+        self.ui.magneticfrequencyspinBox.valueChanged.connect(self.get_widget_vals)
         self.ui.applyacousticbutton.clicked.connect(self.apply_acoustic)
         self.ui.acousticfreq_spinBox.valueChanged.connect(self.get_acoustic_frequency)
-        self.ui.alphaspinBox.valueChanged.connect(self.spinbox_alphachanged)
-        self.ui.alphadial.valueChanged.connect(self.dial_alphachanged)
-        self.ui.resetdefaultbutton.clicked.connect(self.resetparams)
+        
+        self.ui.alphaspinBox.valueChanged.connect(self.get_widget_vals)
+        self.ui.gammaspinBox.valueChanged.connect(self.get_widget_vals)
+        self.ui.psispinBox.valueChanged.connect(self.get_widget_vals)
         self.ui.simulationbutton.clicked.connect(self.toggle_simulation)
 
         self.ui.objectivebox.valueChanged.connect(self.get_objective)
@@ -267,14 +279,17 @@ class MainWindow(QtWidgets.QMainWindow):
         self.ui.joystickbutton.clicked.connect(self.toggle_joystick_status)
         self.ui.autoacousticbutton.clicked.connect(self.toggle_autoacoustic)
         self.ui.manualapplybutton.clicked.connect(self.get_manual_bfieldbuttons)
-        self.ui.manualfieldBx.valueChanged.connect(self.get_slider_vals)
-        self.ui.manualfieldBy.valueChanged.connect(self.get_slider_vals)
-        self.ui.manualfieldBz.valueChanged.connect(self.get_slider_vals)
+        self.ui.manualfieldBx.valueChanged.connect(self.get_widget_vals)
+        self.ui.manualfieldBy.valueChanged.connect(self.get_widget_vals)
+        self.ui.manualfieldBz.valueChanged.connect(self.get_widget_vals)
         self.ui.croppedmasktoggle.clicked.connect(self.showcroppedoriginal)
         self.ui.croppedrecordbutton.clicked.connect(self.croppedrecordfunction)
         self.ui.import_excel_actions.clicked.connect(self.read_excel_actions)
         self.ui.apply_actions.clicked.connect(self.apply_excel_actions)
-        self.ui.arduino_portbox.currentTextChanged.connect(self.handle_sender_port_change)
+        self.ui.coilcurrenttogglebutton.clicked.connect(self.toggle_coil_currents_function)
+
+
+        self.ui.arduino_portbox_sender.currentTextChanged.connect(self.handle_sender_port_change)
         self.ui.arduino_portbox_receiver.currentTextChanged.connect(self.handle_receiver_port_change)
 
         self.ui.cleartrackingbutton.clicked.connect(self.clear_tracking)
@@ -285,6 +300,94 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
         self.ui.make_inf_path.clicked.connect(self.makeinf_trajectory)
+
+
+
+        #MAKE GRAPH
+        self.plotWidget = pg.PlotWidget()
+        self.plotWidget.setBackground('w')  # optional: white background
+        self.plotWidget.showGrid(x=True, y=True)
+        self.plotWidget.setLabel('left', 'Current (A)')
+        self.plotWidget.setLabel('bottom', 'Coils')
+        self.plotWidget.setYRange(min=-5, max=5)
+
+       
+        legend = self.plotWidget.addLegend(offset=(10, 10))
+
+
+
+
+
+        self.x_vals = np.arange(6)
+
+        self.curves = []
+        colors = ['#A52A2A',"#A50DA5", '#008000', '#0000FF', "#9E9E00", '#FFA500']  # brown, blue, green, yellow, orange, purple
+        labels = ['Coil +Y', 'Coil +X', 'Coil -Y', 'Coil -X', 'Coil +Z', 'Coil -Z']
+        # Create bar graph with initial heights
+        self.bar_graph = pg.BarGraphItem(
+            x=self.x_vals,
+            height=[0, 0, 0, 0, 0, 0],
+            width=0.5,
+            brushes=colors
+        )
+
+        self.plotWidget.addItem(self.bar_graph)
+
+        # Add axis labels
+        ax = self.plotWidget.getAxis('bottom')
+        ax.setTicks([ list(zip(self.x_vals, labels)) ])
+
+        self.ui.verticalLayout.addWidget(self.plotWidget)
+
+        
+
+
+
+
+
+
+
+
+    def toggle_coil_currents_function(self):
+        """
+        Toggle the display of coil current data on the plot.
+        """
+        if self.ui.coilcurrenttogglebutton.isChecked():
+            self.ui.coilcurrenttogglebutton.setText("Stop Coil Currents")
+            self.arduino_receive_timer.start(20)   #25msec timer to read arduino data
+        
+        else:
+            self.ui.coilcurrenttogglebutton.setText("Plot Coil Currents")
+            self.arduino_receive_timer.stop()   #25msec timer to read arduino data
+            
+    def read_receive_arduino(self):
+        """
+        Poll receiver Arduino for coil currents and update GUI labels.
+        Keep hall sensor labels update behavior unchanged (if used elsewhere).
+        """
+
+        # Update coil currents from receiver
+        currents = self.arduino_handler.receive_currents()
+        if isinstance(currents, (list, tuple)) and len(currents) >= 6:
+            try:
+
+                self.coil1_current = round(float(currents[0]),2)
+                self.coil2_current = round(float(currents[1]),2)
+                self.coil3_current = round(float(currents[2]),2)
+                self.coil4_current = round(float(currents[3]),2)
+                self.coil5_current = round(float(currents[4]),2)
+                self.coil6_current = round(float(currents[5]),2)
+                
+
+                self.bar_graph.setOpts(height=currents)
+
+            except Exception as e:
+                self.tbprint("Error updating coil currents: {}".format(e))
+
+
+
+    #def update_joystick(self):
+    #    self.joystick_actions.update()
 
         
 
@@ -342,28 +445,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
     
 
-    def update_sensor_and_currents(self):
-        """
-        Poll receiver Arduino for coil currents and update GUI labels.
-        Keep hall sensor labels update behavior unchanged (if used elsewhere).
-        """
-        # Update coil currents from receiver
-        currents = self.control_panel.receive_currents()
-        if isinstance(currents, (list, tuple)) and len(currents) >= 6:
-            try:
-                self.ui.CoilposX_current.setText(f"+X: {float(currents[0]):.2f}")
-                self.ui.CoilnegX_current.setText(f"-X: {float(currents[1]):.2f}")
-                self.ui.CoilposY_current.setText(f"+Y: {float(currents[2]):.2f}")
-                self.ui.CoilnegY_current.setText(f"-Y: {float(currents[3]):.2f}")
-                self.ui.CoilposZ_current.setText(f"+Z: {float(currents[4]):.2f}")
-                self.ui.CoilnegZ_current.setText(f"-Z: {float(currents[5]):.2f}")
-            except Exception:
-                pass
-
-        # Keep existing hall sensor labels (values updated elsewhere if applicable)
-        self.ui.bxlabel.setText("Bx: "+str(self.bx_sensor))
-        self.ui.bylabel.setText("By: "+str(self.by_sensor))
-        self.ui.bzlabel.setText("Bz: "+str(self.bz_sensor))
+    
 
     
 
@@ -372,7 +454,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Main control loop that processes each video frame.
         
         This method:
-        1. Reads hall effect sensor data from Arduino
+        1. Reads receive Arduino data
         2. Executes path planning algorithms if enabled
         3. Runs control algorithms (orient/roll/push) if enabled
         4. Processes joystick input if enabled
@@ -420,9 +502,9 @@ class MainWindow(QtWidgets.QMainWindow):
                     displayframe, actions, stopped = self.control_robot.run_roll(displayframe, robot_list, arrivalthresh)
                     self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, _  = actions    
                     
-                    self.gamma = np.radians(self.ui.gammadial.value())
-                    self.psi = np.radians(self.ui.psidial.value())
-                    self.freq = self.ui.magneticfrequencydial.value()
+                    self.gamma = np.radians(self.ui.gammaspinBox.value())
+                    self.psi = np.radians(self.ui.psispinBox.value())
+                    self.freq = self.ui.magneticfrequencyspinBox.value()
                     if stopped == True:
                         self.apply_actions(False)
                     
@@ -432,11 +514,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     corridor_width = self.ui.corridorwidthbox.value()
                     approach_distance = self.ui.approachdistancebox.value()
                     spinning_freq = self.ui.spinningfreqbox.value()
-                    pushingfreq = self.ui.magneticfrequencydial.value()
+                    pushingfreq = self.ui.magneticfrequencyspinBox.value()
 
                     displayframe, actions = self.control_robot.run_push(displayframe, robot_list, cell_list, arrivalthresh, corridor_width,approach_distance, spinning_freq, pushingfreq, self.tracker.pixel2um)   
                     self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, _  = actions  
-                    self.psi = np.radians(self.ui.psidial.value())
+                    self.psi = np.radians(self.ui.psispinBox.value())
             #zero option
             else:
                 self.apply_actions(False)
@@ -445,17 +527,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
             
         #if joystick is on use the joystick though
-        elif self.joystick_status == True:
+        elif self.joystick_status == True:# and self.joystick_actions.is_active:
             type, self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, acoust = self.joystick_actions.run(self.joystick)
-            self.psi = np.radians(self.ui.psidial.value())
+            self.psi = np.radians(self.ui.psispinBox.value())
             
             if acoust == 1:
                 self.acoustic_frequency = self.ui.acousticfreq_spinBox.value()
             else:
                 self.acoustic_frequency = 0
-
-    
-
             if type == 1:
                 self.gamma = np.radians(180)
                 self.freq = self.ui.spinningfreqbox.value()
@@ -465,9 +544,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.freq = self.ui.spinningfreqbox.value()
             
             else:
-                self.gamma = np.radians(self.ui.gammadial.value())
+                self.gamma = np.radians(self.ui.gammaspinBox.value())
                 if self.freq != 0:
-                    self.freq = self.ui.magneticfrequencydial.value()
+                    self.freq = self.ui.magneticfrequencyspinBox.value()
                     
                         
         
@@ -510,10 +589,10 @@ class MainWindow(QtWidgets.QMainWindow):
             
 
 
-            self.freq = self.ui.magneticfrequencydial.value()
-            self.gamma = np.radians(self.ui.gammadial.value())
-            self.psi = np.radians(self.ui.psidial.value())
-            self.alpha = np.radians(self.ui.alphadial.value())
+            self.freq = self.ui.magneticfrequencyspinBox.value()
+            self.gamma = np.radians(self.ui.gammaspinBox.value())
+            self.psi = np.radians(self.ui.psispinBox.value())
+            self.alpha = np.radians(self.ui.alphaspinBox.value())
            
 
             #ricochet conditions, too close to the x or y borders flip the conditions
@@ -532,25 +611,25 @@ class MainWindow(QtWidgets.QMainWindow):
                         if (bot_pos_x <= boundary and vx < 0) and (self.frame_number - self.ricochet_counter_x[-1] > 30):
                             vx = -vx
                             alpha = int(((np.degrees(np.arctan2(-vy,vx)) + 360) % 360))
-                            self.ui.alphadial.setValue(alpha)
+                            self.ui.alphaspinBox.setValue(alpha)
                             self.ricochet_counter_x.append(self.frame_number)
 
                         if  (bot_pos_x >= self.video_width - boundary and vx > 0) and (self.frame_number - self.ricochet_counter_x[-1] > 30):   
                             vx = -vx
                             alpha = int(((np.degrees(np.arctan2(-vy,vx)) + 360) % 360))
-                            self.ui.alphadial.setValue(alpha)
+                            self.ui.alphaspinBox.setValue(alpha)
                             self.ricochet_counter_x.append(self.frame_number)                  
                         
                         if (bot_pos_y <= boundary and vy < 0) and (self.frame_number - self.ricochet_counter_y[-1] > 30):
                             vy = -vy
                             alpha = int(((np.degrees(np.arctan2(-vy,vx)) + 360) % 360))
-                            self.ui.alphadial.setValue(alpha)
+                            self.ui.alphaspinBox.setValue(alpha)
                             self.ricochet_counter_y.append(self.frame_number)
             
                         if (bot_pos_y >= self.video_height - boundary and vy > 0) and (self.frame_number - self.ricochet_counter_y[-1] > 30):# and (self.frame_number - self.ricochet_counter_y[-1] > 30): #if the bot hits the top wall   
                             vy = -vy
                             alpha = int(((np.degrees(np.arctan2(-vy,vx)) + 360) % 360))
-                            self.ui.alphadial.setValue(alpha)
+                            self.ui.alphaspinBox.setValue(alpha)
                             self.ricochet_counter_y.append(self.frame_number)
                            
                     
@@ -626,8 +705,9 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.cells.append(currentcell_params)
         
         #DEFINE CURRENT MAGNETIC FIELD OUTPUT TO A LIST 
-        self.actions = [self.frame_number, self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, self.gradient_status,self.equal_field_status,
-                        self.acoustic_frequency, self.bx_sensor, self.by_sensor, self.bz_sensor] 
+
+        self.actions = [self.frame_number, time.time()-self.starttime, self.Bx, self.By, self.Bz, self.alpha, self.gamma, self.freq, self.psi, self.gradient_status,self.equal_field_status,
+                        self.acoustic_frequency, self.coil1_current, self.coil2_current, self.coil3_current,self.coil4_current,self.coil5_current,self.coil6_current] 
        
         self.magnetic_field_list.append(self.actions)
         
@@ -704,8 +784,10 @@ class MainWindow(QtWidgets.QMainWindow):
             except queue.Full:
                 pass
       
-
+        #send actions to arduino and field simulator
         self.apply_actions(True)
+
+       
 
            
 
@@ -750,15 +832,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.simulator.freq = self.freq
         self.simulator.omega = 2 * np.pi * self.simulator.freq
 
-        #send actions via ControlPanel
-        self.control_panel.send_actions(self.Bx, self.By, self.Bz,
+        #send actions via ArduinoHandler
+        """  self.tbprint(f"Sending: Bx, By, Bz, alpha, gamma, freq, psi, grad, equal, acoust: "
+        f"{self.Bx:.2f},{self.By:.2f},{self.Bz:.2f},{self.alpha:.2f},{self.gamma:.2f},"
+        f"{self.freq:.2f},{self.psi:.2f},{self.gradient_status:.2f},{self.equal_field_status:.2f},"
+        f"{self.acoustic_frequency:.2f}")"""
+        
+        self.arduino_handler.send_actions(self.Bx, self.By, self.Bz,
                                         self.alpha, self.gamma, self.freq, self.psi,
                                         self.gradient_status, self.equal_field_status,
                                         self.acoustic_frequency)
+        
+        
+
 
     def toggle_recording(self):
         """Toggle video recording on/off."""
-        tracking_panel.toggle_recording(self)
+        tracking_panel_class.toggle_recording(self)
 
     def start_data_record(self):
         """
@@ -773,18 +863,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tracker.framenum = 1
         self.tracker.start_time = time.time()
         self.tracker.time_stamp = 0
+        self.starttime = time.time()
+
         
         self.output_workbook = openpyxl.Workbook()
             
         #create sheet for magneti field actions
         self.magnetic_field_sheet = self.output_workbook.create_sheet(title="Magnetic Field Actions")#self.output_workbook.active
-        self.magnetic_field_sheet.append(["Frame","Bx (%)", "By (%)", "Bz (%)", "Alpha (rad)", "Gamma (rad)", "Rolling Frequency (Hz)", "Psi (rad)", "Gradient?","Equal Field?", "Acoustic Frequency (Hz)","Sensor Bx", "Sensor By", "Sensor Bz"])
+        self.magnetic_field_sheet.append(["Frame", "Time(s)", "Bx (%)", "By (%)", "Bz (%)", "Alpha (rad)", "Gamma (rad)", "Rolling Frequency (Hz)", "Psi (rad)", "Gradient?","Equal Field?", "Acoustic Frequency (Hz)","Current1", "Current2", "Current3", "Current4", "Current5", "Current6"])
 
         #create sheet for robot data
         self.robot_params_sheets = []
         for i in range(len(self.robots)):
             robot_sheet = self.output_workbook.create_sheet(title= "Robot {}".format(i+1))
-            robot_sheet.append(["Frame","Time(s)","Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Acc X (um/s2)", "Acc Y (um/s2)", "Acc Mag (um/s2)", "Blur", "Area (um^2)","pixel2um","Path X (um)", "Path Y (um)"])
+            robot_sheet.append(["Frame", "Time(s)", "Pos X (um)", "Pos Y (um)", "Vel X (um/s)", "Vel Y (um/s)", "Vel Mag (um/s)", "Acc X (um/s2)", "Acc Y (um/s2)", "Acc Mag (um/s2)", "Blur", "Area (um^2)","pixel2um","Path X (um)", "Path Y (um)"])
             self.robot_params_sheets.append(robot_sheet)
         
         #create sheet for robot data
@@ -800,10 +892,6 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 
-    
-
-
-
 
     def stop_data_record(self):
         """
@@ -816,7 +904,7 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.save_status = False
         file_path  = os.path.join(self.new_dir_path, self.output_file_name+".xlsx")
-        print(self.output_file_name)
+        self.tbprint(self.output_file_name)
         
         #add trajectory to file after the fact
         if self.output_workbook is not None:
@@ -909,7 +997,6 @@ class MainWindow(QtWidgets.QMainWindow):
             self.control_robot.reset()
             self.control_status = True
             self.ui.controlbutton.setText("Stop")
-            self.tbprint("Control On: {} Hz".format(self.acoustic_frequency))
         else:
             self.control_status = False
             self.ui.controlbutton.setText("Control")
@@ -990,9 +1077,7 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         if self.ui.applyacousticbutton.isChecked():
             self.ui.applyacousticbutton.setText("Stop")
-            #self.tbprint("Control On: {} Hz".format(self.acoustic_frequency))
             self.acoustic_frequency = self.ui.acousticfreq_spinBox.value()
-            #self.apply_actions(True)
             self.ui.led.setStyleSheet("\n"
 "                background-color: rgb(0, 255, 0);\n"
 "                border-style: outset;\n"
@@ -1073,7 +1158,7 @@ class MainWindow(QtWidgets.QMainWindow):
         Returns:
             bool: True if event was handled, False otherwise
         """
-        return tracking_panel.eventFilter(self, object, event)
+        return tracking_panel_class.eventFilter(self, object, event)
             
             
         
@@ -1228,35 +1313,39 @@ class MainWindow(QtWidgets.QMainWindow):
     def populate_serial_ports(self):
         """Scan and populate dropdowns with available serial ports for Arduinos."""
         ports = list_ports.comports()
+    
         # clear and repopulate both
-        self.ui.arduino_portbox.clear()
+        self.ui.arduino_portbox_sender.clear()
         self.ui.arduino_portbox_receiver.clear()
         port_names = [p.device for p in ports]
         for name in port_names:
-            self.ui.arduino_portbox.addItem(name)
+            self.ui.arduino_portbox_sender.addItem(name)
             self.ui.arduino_portbox_receiver.addItem(name)
         # default selections if available
         if len(port_names) >= 1:
             self.arduino_sender_port = port_names[0]
+            
         if len(port_names) >= 2:
             self.arduino_receiver_port = port_names[1]
-            self.ui.arduino_portbox_receiver.setCurrentText(port_names[1])
+            #self.ui.arduino_portbox_receiver.setCurrentText(port_names[1])
 
     def handle_sender_port_change(self, selected_port):
         """Handle Sender Arduino serial port selection."""
-        ok = self.control_panel.set_sender_port(selected_port)
+        ok = self.arduino_handler.set_sender_port(selected_port)
         if not ok:
             self.tbprint(f"Sender connect error: {selected_port}")
 
     def handle_receiver_port_change(self, selected_port):
         """Handle Receiver Arduino serial port selection."""
-        ok = self.control_panel.set_receiver_port(selected_port)
+        ok = self.arduino_handler.set_receiver_port(selected_port)
         if not ok:
             self.tbprint(f"Receiver connect error: {selected_port}")
 
+
+
     def start(self):
         """Start video capture and tracking loop."""
-        tracking_panel.start(self)
+        tracking_panel_class.start(self)
 
     def showmask(self):
         """Toggle display between original video and segmentation mask."""
@@ -1279,13 +1368,6 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.tracker.croppedmask_flag = True
 
 
-    def spinbox_alphachanged(self):
-        """Sync alpha angle dial with spinbox value."""
-        self.ui.alphadial.setValue(self.ui.alphaspinBox.value())
-    
-    def dial_alphachanged(self):
-        """Sync alpha angle spinbox with dial value."""
-        self.ui.alphaspinBox.setValue(self.ui.alphadial.value())
 
     def gradientcommand(self):
         """Toggle magnetic field gradient mode on/off."""
@@ -1353,7 +1435,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
        
-    def get_slider_vals(self):
+    def get_widget_vals(self):
         """
         Read all UI slider and spinbox values and apply to tracker.
         
@@ -1361,10 +1443,11 @@ class MainWindow(QtWidgets.QMainWindow):
         blur, crop sizes, and control parameters.
         """
         memory = self.ui.memorybox.value()
-        magneticfreq = self.ui.magneticfrequencydial.value()
-        gamma = self.ui.gammadial.value()
-        psi = self.ui.psidial.value()
-        #alpha = self.ui.alphaspinBox.value()
+
+        self.ui.alphaspinBox.setValue(self.ui.alphaspinBox.value())
+        self.ui.psispinBox.setValue(self.ui.psispinBox.value())
+        self.ui.gammaspinBox.setValue(self.ui.gammaspinBox.value())
+     
         
         robotlower = self.ui.robotmasklowerbox.value() 
         robotupper = self.ui.robotmaskupperbox.value()
@@ -1377,6 +1460,9 @@ class MainWindow(QtWidgets.QMainWindow):
         celldilation = self.ui.cellmaskdilationbox.value() 
         cellmaskblur = self.ui.cellmaskblurbox.value()
         cellcrop_length = self.ui.cellcroplengthbox.value()
+
+
+
         
 
         if self.tracker is not None: 
@@ -1398,37 +1484,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tracker.cell_crop_length = cellcrop_length
             
 
-        self.ui.gammalabel.setText("Gamma: {}".format(gamma))
-        self.ui.psilabel.setText("Psi: {}".format(psi))
-        #self.ui.rollingfrequencylabel.setText("Freq: {}".format(magneticfreq))
-
          
-        
-    def resetparams(self):
-        """Reset all tracking and control parameters to default values."""
-        self.ui.robotmasklowerbox.setValue(0)
-        self.ui.robotmaskupperbox.setValue(128)
-        self.ui.robotmaskdilationbox.setValue(0)
-        self.ui.robotmaskblurbox.setValue(0)
-        self.ui.robotcroplengthbox.setValue(40)
-
-        self.ui.cellmasklowerbox.setValue(0)
-        self.ui.cellmaskupperbox.setValue(128)
-        self.ui.cellmaskdilationbox.setValue(0)
-        self.ui.cellmaskblurbox.setValue(0)
-        self.ui.cellcroplengthbox.setValue(40)
-        
-
-    
-        self.ui.memorybox.setValue(15)
-        self.ui.RRTtreesizebox.setValue(25)
-        self.ui.arrivalthreshbox.setValue(100)
-        self.ui.gammadial.setSliderPosition(90)
-        self.ui.psidial.setSliderPosition(90)
-        self.ui.magneticfrequencydial.setValue(10)
-        self.ui.acousticfreq_spinBox.setValue(1000000)
-        self.ui.objectivebox.setValue(10)
-        self.ui.exposurebox.setValue(5000)
         
 
     def resizeEvent(self, event):
@@ -1544,5 +1600,5 @@ class MainWindow(QtWidgets.QMainWindow):
         
         self.simulator.stop()
         
-        # Close ControlPanel
-        self.control_panel.close()
+        # Close ArduinoHandler
+        self.arduino_handler.close()

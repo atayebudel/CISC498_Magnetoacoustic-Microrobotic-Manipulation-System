@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from scipy import ndimage 
 import time
 
-from classes.fps_class import FPSCounter
+from classes.Tracking.fps_class import FPSCounter
     
 #add unique crop length 
 class VideoThread(QThread):
@@ -500,11 +500,6 @@ class VideoThread(QThread):
                 
                 
                 displayframe = self.display_hud(frame)
-  
-
-          
-                
-                
 
                 
                 #step 3: emit croppedframe, frame from this thread to the main thread
@@ -512,14 +507,6 @@ class VideoThread(QThread):
                 self.actions_frame_signal.emit(displayframe, cell_mask, self.robot_list, self.cell_list)
                 
 
-              
-                
-
-                
-
-    
-            
-           
 
 
     def stop(self):
