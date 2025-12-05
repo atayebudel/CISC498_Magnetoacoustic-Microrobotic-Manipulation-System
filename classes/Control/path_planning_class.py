@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import random
 import math
-from classes.mpc.rrtstar import RrtStar
+from classes.Control.mpc.rrtstar import RrtStar
 
 
 

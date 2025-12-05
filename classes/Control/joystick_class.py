@@ -182,6 +182,8 @@ class Windows_Joystick:
                 if event.axis == 2 or event.axis == 3: #RY
                     rx = self.deadzone(joystick.get_axis(2))
                     ry = -self.deadzone(joystick.get_axis(3))
+
+                    
                 
                     if rx == 0 and ry == 0:
                         self.alpha = 0
@@ -274,7 +276,7 @@ class Windows_Joystick:
                         self.psi,
                         self.acoustic_frequency]
         
-
+     
         return self.actions
 
         

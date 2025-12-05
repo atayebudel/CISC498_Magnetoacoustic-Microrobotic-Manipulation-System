@@ -46,7 +46,7 @@ from classes.arduino.arduino_handler_class import ArduinoHandler
 from classes.Tracking import tracking_panel_class  
 from classes.Control.control_class import Controller
 from classes.Control.path_planning_class import Path_Planner
-from classes.Control.simulation_class import HelmholtzSimulator
+from classes.Control.field_simulation_class import HelmholtzSimulator
 from classes.Control.joystick_class import Mac_Joystick,Linux_Joystick,Windows_Joystick
 
 #from classes.Control.genjoystick_class import genJoystick
@@ -1307,10 +1307,13 @@ class MainWindow(QtWidgets.QMainWindow):
         # default selections if available
         if len(port_names) >= 1:
             self.arduino_sender_port = port_names[0]
-            
+            ok = self.arduino_handler.set_sender_port(self.arduino_sender_port)
+
         if len(port_names) >= 2:
             self.arduino_receiver_port = port_names[1]
-            #self.ui.arduino_portbox_receiver.setCurrentText(port_names[1])
+            ok = self.arduino_handler.set_receiver_port(self.arduino_receiver_port)
+            
+        
 
     def handle_sender_port_change(self, selected_port):
         """Handle Sender Arduino serial port selection."""

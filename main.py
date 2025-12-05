@@ -9,6 +9,7 @@ from classes.gui_functions import MainWindow
 # maybe allow for setting activating each coil instead of BX BY BZ (x6)
 # add acoustic electronics
 # add current lables in plot
+# add tb print to the arduino handler
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
